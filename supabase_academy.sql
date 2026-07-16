@@ -176,9 +176,9 @@ where user_id = (select id from auth.users where email = 'YOUR_EMAIL_HERE');
 -- Creates your academy and assigns it to you
 with new_academy as (
   insert into academies (name, location, created_by)
-  values ('Grounded Skills Lab', '', (select id from auth.users where email = 'YOUR_EMAIL_HERE'))
+  values ('Grounded Skills Lab', '', (select id from auth.users where email = 'gregarious1@gmail.com'))
   returning id
 )
 update user_roles
 set academy_id = (select id from new_academy)
-where user_id = (select id from auth.users where email = 'YOUR_EMAIL_HERE');
+where user_id = (select id from auth.users where email = 'gregarious1@gmail.com');

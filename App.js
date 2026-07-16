@@ -3715,19 +3715,33 @@ function AuthScreen({ onAuth }) {
         // If no confirmation required (e.g. email confirmations disabled), session is live
       }
     } catch (e) {
-      // User-friendly error messages
-      const msg = e.message || '';
-      if (msg.includes('already registered') || msg.includes('User already registered')) {
+      // Extract a readable message from any error shape Supabase might return
+      const msg = (
+        (typeof e === 'string' && e) ||
+        e?.message ||
+        e?.error_description ||
+        e?.msg ||
+        (e?.status ? `Error ${e.status}` : '') ||
+        ''
+      );
+
+      if (msg.includes('already registered') || msg.includes('User already registered') || msg.includes('already exists')) {
         setError('An account with this email already exists. Try signing in instead.');
         setMode('login');
-      } else if (msg.includes('password') && msg.includes('characters')) {
+      } else if (msg.includes('password') && msg.includes('character')) {
         setError('Password must be at least 6 characters.');
-      } else if (msg.includes('valid email') || msg.includes('invalid email')) {
+      } else if (msg.includes('valid email') || msg.includes('invalid email') || msg.includes('email')) {
         setError('Please enter a valid email address.');
-      } else if (msg.includes('Database error') || msg.includes('database')) {
-        setError('Server error during signup. Please try again in a moment.');
+      } else if (msg.includes('Database error') || msg.includes('database') || msg.includes('unexpected') || msg.includes('trigger')) {
+        setError('There was a server error during signup. Please try again in a moment.');
+      } else if (msg.includes('rate limit') || msg.includes('too many')) {
+        setError('Too many attempts. Please wait a minute and try again.');
+      } else if (msg.includes('Invalid login') || msg.includes('Invalid credentials') || msg.includes('invalid credentials')) {
+        setError('Incorrect email or password. Please try again.');
+      } else if (msg) {
+        setError(msg);
       } else {
-        setError(msg || 'Something went wrong. Please try again.');
+        setError('Something went wrong. Please try again.');
       }
     }
     setLoading(false);
