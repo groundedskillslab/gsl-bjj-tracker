@@ -687,7 +687,7 @@ function EventLogPanel({ log=[], onDeleteEvent }) {
 }
 
 // ─── Quick Score Sheet (Modal bottom sheet) ─────────────────────────────────────
-function QuickScoreSheet({ visible, isOpp, onClose, onRecord }) {
+function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }) {
   const [step,       setStep]       = useState('pick');
   const [scoreKey,   setScoreKey]   = useState(null);
   const [sel1,       setSel1]       = useState(null);
@@ -726,7 +726,16 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord }) {
   };
 
   // OptionList: scrollable items + pinned custom input OUTSIDE the scroll
-  const OptionList = ({ items, onPick, pts, accent, showPts=true }) => (
+  const OptionList = ({ items, onPick, pts, accent, showPts=true }) => {
+    // Predictive suggestions: match custom input against all known techniques
+    const suggestions = customVal.trim().length > 0
+      ? allTechniques.filter(t =>
+          t.toLowerCase().includes(customVal.toLowerCase()) &&
+          !items.includes(t) // don't show if already in main list
+        ).slice(0, 5)
+      : [];
+
+    return (
     <View style={{ flex:1 }}>
       <ScrollView
         ref={scrollRef}
@@ -746,7 +755,7 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord }) {
         <View style={{ height:8 }}/>
       </ScrollView>
 
-      {/* Pinned custom input — sits outside the ScrollView so keyboard doesn't bury it */}
+      {/* Pinned custom input + predictive suggestions */}
       {!showCustom ? (
         <TouchableOpacity onPress={openCustom} activeOpacity={0.75}
           style={{ flexDirection:'row', alignItems:'center', padding:14, marginTop:8,
@@ -757,6 +766,26 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord }) {
       ) : (
         <View style={{ borderTopWidth:1, borderTopColor:C.borderMid, paddingTop:12, marginTop:4 }}>
           <Cap style={{ marginBottom:8, color:accent }}>Type your technique</Cap>
+
+          {/* Predictive suggestions */}
+          {suggestions.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="always" style={{ marginBottom:10 }}>
+              <View style={{ flexDirection:'row', gap:6 }}>
+                {suggestions.map(s => (
+                  <TouchableOpacity key={s} onPress={()=>{ setCustomVal(''); setShowCustom(false); onPick(s); }}
+                    activeOpacity={0.75}
+                    style={{ borderWidth:1, borderColor:`${accent}55`, backgroundColor:`${accent}12`,
+                      paddingHorizontal:10, paddingVertical:7, flexDirection:'row', alignItems:'center', gap:4 }}>
+                    <Txt style={{ fontSize:9, color:accent }}>↑</Txt>
+                    <Txt style={{ fontSize:11, color:accent, fontFamily:'Outfit_600SemiBold' }}>{s}</Txt>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* Text input */}
           <View style={{ flexDirection:'row', alignItems:'center', borderWidth:2, borderColor:accent }}>
             <TextInput
               ref={inputRef}
@@ -786,7 +815,8 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord }) {
         </View>
       )}
     </View>
-  );
+    );
+  };
 
   const stepHeaders = {
     pick:           'Record Score',
@@ -1253,7 +1283,9 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
 
       {subTab==='Event Log' && <EventLogPanel log={roll.eventLog||[]} onDeleteEvent={deleteEvent}/>}
 
-      <QuickScoreSheet visible={scoreSheet!==null} isOpp={scoreSheet==='opp'} onClose={()=>setScoreSheet(null)} onRecord={(key,context)=>{ quickScore(scoreSheet==='opp',key,context||{}); setScoreSheet(null); }}/>
+      <QuickScoreSheet visible={scoreSheet!==null} isOpp={scoreSheet==='opp'} onClose={()=>setScoreSheet(null)}
+        allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}
+        onRecord={(key,context)=>{ quickScore(scoreSheet==='opp',key,context||{}); setScoreSheet(null); }}/>
     </View>
   );
 }
@@ -1346,7 +1378,32 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
                     <Cap>Custom technique…</Cap>
                   </TouchableOpacity>
                 </ScrollView>
-                {showCustom && <FieldInput value={customSub} onChangeText={setCustomSub} placeholder="e.g. Twister, Calf Slicer…"/>}
+                {showCustom && (
+                  <View>
+                    {/* Predictive suggestions */}
+                    {customSub.trim().length > 0 && submissions.filter(s =>
+                      s.toLowerCase().includes(customSub.toLowerCase())
+                    ).length > 0 && (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                        keyboardShouldPersistTaps="always" style={{ marginBottom:8 }}>
+                        <View style={{ flexDirection:'row', gap:6 }}>
+                          {submissions.filter(s =>
+                            s.toLowerCase().includes(customSub.toLowerCase())
+                          ).slice(0,5).map(s => (
+                            <TouchableOpacity key={s} onPress={()=>{ setSubName(s); setCustomSub(''); setShowC(false); }}
+                              activeOpacity={0.75}
+                              style={{ borderWidth:1, borderColor:`${C.red}55`, backgroundColor:`${C.red}12`,
+                                paddingHorizontal:10, paddingVertical:7, flexDirection:'row', alignItems:'center', gap:4 }}>
+                              <Txt style={{ fontSize:9, color:C.red }}>↑</Txt>
+                              <Txt style={{ fontSize:11, color:C.red, fontFamily:'Outfit_600SemiBold' }}>{s}</Txt>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </ScrollView>
+                    )}
+                    <FieldInput value={customSub} onChangeText={setCustomSub} placeholder="e.g. Twister, Calf Slicer…"/>
+                  </View>
+                )}
                 <FieldInput label="Duration (optional)" value={duration} onChangeText={setDuration} placeholder="e.g. 4:47"/>
               </>
             )}
