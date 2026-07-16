@@ -1,0 +1,11 @@
+[build]
+  command = "npm install && expo export -p web && echo '/* /index.html 200' > dist/_redirects"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

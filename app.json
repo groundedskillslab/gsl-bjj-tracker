@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Grounded Skills Lab",
+    "slug": "gsl-bjj-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0F0F0D",
+    "splash": {
+      "backgroundColor": "#0F0F0D",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gsl.bjjtracker"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0F0F0D"
+      },
+      "package": "com.gsl.bjjtracker",
+      "screenOrientation": "portrait"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
