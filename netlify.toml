@@ -1,11 +1,18 @@
 [build]
-  command = "npm install && expo export -p web && cp _redirects dist/_redirects 2>/dev/null || echo '/* /index.html 200' > dist/_redirects"
+  command = "npm install && expo export -p web && echo '/* /index.html 200' > dist/_redirects && cat dist/_redirects"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
+  EXPO_NO_TELEMETRY = "1"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
