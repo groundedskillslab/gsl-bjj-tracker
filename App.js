@@ -168,9 +168,26 @@ const db = {
     return data;
   },
   async upsertAthlete(athlete) {
-    const { data, error } = await supabase.from('athletes').upsert(athlete).select().single();
-    if (error) throw error;
-    return data;
+    // Use update if we have an id, insert otherwise
+    if (athlete.id) {
+      const { id, user_id, created_at, ...fields } = athlete;
+      const { data, error } = await supabase
+        .from('athletes')
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } else {
+      const { data, error } = await supabase
+        .from('athletes')
+        .insert(athlete)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
   },
 
   // ── Technique lists ───────────────────────────────────────────────────────────
@@ -3275,46 +3292,26 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole }) {
   })();
 
   // Admin: assign role to a user by email
-  const assignCoach = async () => {
-    if (!newCoachEmail.trim()) return;
+  const assignCoach = async (athleteUserId, athleteName) => {
+    if (!athleteUserId) return;
     setManageLoading(true); setManageMsg('');
     try {
-      // Find user by email via athletes table (can't query auth.users directly from client)
-      const { data: ath } = await supabase
-        .from('athletes')
-        .select('user_id')
-        .ilike('gym', `%${newCoachEmail}%`) // fallback — use email stored in gym field
-        .single();
-
-      // Better: look up by matching email prefix in name
-      const { data: matchedAth } = await supabase
-        .from('athletes')
-        .select('user_id, name')
-        .ilike('name', `%${newCoachEmail.split('@')[0]}%`)
-        .single();
-
-      const targetUserId = matchedAth?.user_id || ath?.user_id;
-      if (!targetUserId) {
-        setManageMsg('❌ User not found. Make sure they have signed up first.');
-        setManageLoading(false); return;
-      }
-
-      const academyId = academies.find(a => a.name === newCoachAcademy || a.id === newCoachAcademy)?.id;
+      const academyId = academies.find(a => a.name === newCoachAcademy || a.id === newCoachAcademy)?.id || null;
 
       await supabase.from('user_roles').upsert({
-        user_id: targetUserId,
+        user_id: athleteUserId,
         role: 'coach',
-        academy_id: academyId || null,
+        academy_id: academyId,
       });
 
       if (academyId) {
-        await supabase.from('athletes').update({ academy_id: academyId }).eq('user_id', targetUserId);
+        await supabase.from('athletes').update({ academy_id: academyId }).eq('user_id', athleteUserId);
+        setAthletes(aths => aths.map(a => a.user_id === athleteUserId ? { ...a, academy_id: academyId } : a));
       }
 
-      setManageMsg(`✓ ${newCoachEmail} is now a coach${academyId ? ` at ${newCoachAcademy}` : ''}.`);
-      setNewCoachEmail(''); setNewCoachAcademy('');
+      setManageMsg(`✓ ${athleteName} is now a coach${newCoachAcademy ? ` at ${newCoachAcademy}` : ''}.`);
+      setNewCoachAcademy('');
 
-      // Refresh user list
       const { data: users } = await supabase.from('user_roles').select('user_id, role, academy_id');
       setAllUsers(users || []);
     } catch(e) {
@@ -3450,14 +3447,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole }) {
               <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Assign Coach Role</Txt>
             </View>
             <View style={{ padding:14 }}>
-              <Cap style={{ marginBottom:6 }}>User's name or email prefix</Cap>
-              <TextInput
-                value={newCoachEmail} onChangeText={setNewCoachEmail}
-                placeholder="e.g. john (from john@email.com)" placeholderTextColor={C.muted}
-                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                  fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint, marginBottom:12 }}/>
-              <Cap style={{ marginBottom:6 }}>Assign to Academy</Cap>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:12 }}>
+              <Cap style={{ marginBottom:8 }}>Select Academy for New Coach</Cap>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
                 <View style={{ flexDirection:'row', gap:6 }}>
                   {academies.map(ac=>(
                     <TouchableOpacity key={ac.id} onPress={()=>setNewCoachAcademy(ac.name)} activeOpacity={0.75}
@@ -3469,12 +3460,57 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole }) {
                   ))}
                 </View>
               </ScrollView>
-              <TouchableOpacity onPress={assignCoach} disabled={manageLoading||!newCoachEmail.trim()} activeOpacity={0.8}
-                style={{ backgroundColor:newCoachEmail.trim()?C.teal:C.faint, padding:14, alignItems:'center' }}>
-                {manageLoading
-                  ? <ActivityIndicator color={C.offWhite}/>
-                  : <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:C.offWhite }}>Assign Coach</Txt>}
-              </TouchableOpacity>
+
+              <Cap style={{ marginBottom:8 }}>Tap an athlete to make them a coach</Cap>
+              {athletes.filter(a => {
+                const role = allUsers.find(u => u.user_id === a.user_id)?.role;
+                return role === 'athlete' || !role;
+              }).map(a => (
+                <TouchableOpacity key={a.id} onPress={()=>assignCoach(a.user_id, a.name||'Unnamed')}
+                  disabled={manageLoading} activeOpacity={0.75}
+                  style={{ flexDirection:'row', alignItems:'center', gap:10, padding:12,
+                    marginBottom:6, borderWidth:1, borderColor:C.border, backgroundColor:C.faint }}>
+                  <ProfileAvatar name={a.name||'?'} size={28} belt={a.belt||'white'}/>
+                  <View style={{ flex:1 }}>
+                    <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:C.text }}>{a.name||'Unnamed'}</Txt>
+                    <BeltBadge belt={a.belt||'white'} stripes={a.stripes||0} size="sm"/>
+                  </View>
+                  <View style={{ borderWidth:1, borderColor:`${C.teal}55`, paddingHorizontal:8, paddingVertical:4 }}>
+                    <Txt style={{ fontSize:8, color:C.teal, fontFamily:'Outfit_700Bold', letterSpacing:1 }}>Make Coach</Txt>
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {/* Current coaches */}
+              {allUsers.filter(u => u.role === 'coach').length > 0 && (
+                <View style={{ marginTop:12 }}>
+                  <Cap style={{ marginBottom:8, color:C.teal }}>Current Coaches</Cap>
+                  {allUsers.filter(u => u.role === 'coach').map(u => {
+                    const ath = athletes.find(a => a.user_id === u.user_id);
+                    const ac = academies.find(a => a.id === u.academy_id);
+                    return (
+                      <View key={u.user_id} style={{ flexDirection:'row', alignItems:'center', gap:8,
+                        padding:10, marginBottom:4, borderWidth:1, borderColor:`${C.teal}44`,
+                        backgroundColor:`${C.teal}0A` }}>
+                        <Txt style={{ fontSize:12, color:C.teal, fontFamily:'Outfit_700Bold', flex:1 }}>
+                          {ath?.name || 'Unknown'}
+                        </Txt>
+                        {ac && <Cap style={{ color:C.teal, fontSize:7 }}>{ac.name}</Cap>}
+                        <TouchableOpacity onPress={async ()=>{
+                          await supabase.from('user_roles').upsert({ user_id: u.user_id, role:'athlete', academy_id: u.academy_id });
+                          const { data: users } = await supabase.from('user_roles').select('user_id, role, academy_id');
+                          setAllUsers(users||[]);
+                          setManageMsg(`✓ ${ath?.name||'User'} changed back to athlete.`);
+                        }} activeOpacity={0.75}
+                          style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:6, paddingVertical:3 }}>
+                          <Txt style={{ fontSize:8, color:C.red, fontFamily:'Outfit_700Bold' }}>Remove</Txt>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
               {manageMsg ? (
                 <View style={{ marginTop:10, padding:10, borderWidth:1,
                   borderColor:manageMsg.startsWith('✓')?`${C.sage}55`:`${C.red}55`,
@@ -3690,53 +3726,60 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole }) {
 
 // ─── Auth Screen ───────────────────────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
-  const [mode,     setMode]     = useState('login'); // 'login' | 'signup'
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
+  const [mode,      setMode]      = useState('login');
+  const [firstName, setFirstName] = useState('');
+  const [lastName,  setLastName]  = useState('');
+  const [email,     setEmail]     = useState('');
+  const [password,  setPassword]  = useState('');
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
+
+  const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
 
   const submit = async () => {
+    if (mode === 'signup' && !firstName.trim()) {
+      setError('Please enter your first name.'); return;
+    }
     setLoading(true); setError('');
     try {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({
+          email, password,
+          options: { data: { full_name: fullName } },
+        });
         if (error) throw error;
-        // Check if email confirmation is required
+        // After signup, update the athlete name that the trigger created
+        if (data?.user) {
+          await supabase.from('athletes')
+            .update({ name: fullName })
+            .eq('user_id', data.user.id);
+        }
         if (data?.user && !data?.session) {
           setError('✓ Account created! Check your email for a confirmation link, then sign in.');
-          setMode('login');
-          setLoading(false);
-          return;
+          setMode('login'); setLoading(false); return;
         }
-        // If no confirmation required (e.g. email confirmations disabled), session is live
       }
     } catch (e) {
-      // Extract a readable message from any error shape Supabase might return
       const msg = (
         (typeof e === 'string' && e) ||
-        e?.message ||
-        e?.error_description ||
-        e?.msg ||
-        (e?.status ? `Error ${e.status}` : '') ||
-        ''
+        e?.message || e?.error_description || e?.msg ||
+        (e?.status ? `Error ${e.status}` : '') || ''
       );
-
-      if (msg.includes('already registered') || msg.includes('User already registered') || msg.includes('already exists')) {
+      if (msg.includes('already registered') || msg.includes('already exists')) {
         setError('An account with this email already exists. Try signing in instead.');
         setMode('login');
       } else if (msg.includes('password') && msg.includes('character')) {
         setError('Password must be at least 6 characters.');
-      } else if (msg.includes('valid email') || msg.includes('invalid email') || msg.includes('email')) {
+      } else if (msg.includes('valid email') || msg.includes('invalid email')) {
         setError('Please enter a valid email address.');
-      } else if (msg.includes('Database error') || msg.includes('database') || msg.includes('unexpected') || msg.includes('trigger')) {
-        setError('There was a server error during signup. Please try again in a moment.');
+      } else if (msg.includes('Database error') || msg.includes('database')) {
+        setError('There was a server error. Please try again in a moment.');
       } else if (msg.includes('rate limit') || msg.includes('too many')) {
         setError('Too many attempts. Please wait a minute and try again.');
-      } else if (msg.includes('Invalid login') || msg.includes('Invalid credentials') || msg.includes('invalid credentials')) {
+      } else if (msg.includes('Invalid login') || msg.includes('Invalid credentials')) {
         setError('Incorrect email or password. Please try again.');
       } else if (msg) {
         setError(msg);
@@ -3746,6 +3789,8 @@ function AuthScreen({ onAuth }) {
     }
     setLoading(false);
   };
+
+  const canSubmit = email && password && (mode === 'login' || firstName.trim());
 
   return (
     <View style={{ flex:1, backgroundColor:C.bg, paddingTop:TOP_INSET }}>
@@ -3761,6 +3806,31 @@ function AuthScreen({ onAuth }) {
 
           {/* Form */}
           <View style={{ width:'100%', maxWidth:380 }}>
+
+            {/* Name fields — signup only */}
+            {mode === 'signup' && (
+              <View style={{ flexDirection:'row', gap:10, marginBottom:16 }}>
+                <View style={{ flex:1 }}>
+                  <Cap style={{ marginBottom:6 }}>First Name</Cap>
+                  <TextInput
+                    value={firstName} onChangeText={setFirstName}
+                    placeholder="First" placeholderTextColor={C.muted}
+                    autoCapitalize="words" returnKeyType="next"
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:15,
+                      fontFamily:'Outfit_400Regular', padding:14, backgroundColor:C.card }}/>
+                </View>
+                <View style={{ flex:1 }}>
+                  <Cap style={{ marginBottom:6 }}>Last Name</Cap>
+                  <TextInput
+                    value={lastName} onChangeText={setLastName}
+                    placeholder="Last" placeholderTextColor={C.muted}
+                    autoCapitalize="words" returnKeyType="next"
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:15,
+                      fontFamily:'Outfit_400Regular', padding:14, backgroundColor:C.card }}/>
+                </View>
+              </View>
+            )}
+
             <Cap style={{ marginBottom:6 }}>Email</Cap>
             <TextInput
               value={email} onChangeText={setEmail}
@@ -3778,13 +3848,16 @@ function AuthScreen({ onAuth }) {
                 fontFamily:'Outfit_400Regular', padding:14, marginBottom:24, backgroundColor:C.card }}/>
 
             {error ? (
-              <View style={{ borderWidth:1, borderColor:`${C.amber}44`, backgroundColor:`${C.amber}15`, padding:12, marginBottom:16 }}>
-                <Txt style={{ fontSize:12, color:C.amber, lineHeight:18 }}>{error}</Txt>
+              <View style={{ borderWidth:1,
+                borderColor:error.startsWith('✓')?`${C.sage}44`:`${C.amber}44`,
+                backgroundColor:error.startsWith('✓')?`${C.sage}15`:`${C.amber}15`,
+                padding:12, marginBottom:16 }}>
+                <Txt style={{ fontSize:12, color:error.startsWith('✓')?C.sage:C.amber, lineHeight:18 }}>{error}</Txt>
               </View>
             ) : null}
 
-            <TouchableOpacity onPress={submit} disabled={loading || !email || !password} activeOpacity={0.8}
-              style={{ backgroundColor:(!email||!password)?C.faint:C.gold, padding:16, alignItems:'center', marginBottom:16 }}>
+            <TouchableOpacity onPress={submit} disabled={loading || !canSubmit} activeOpacity={0.8}
+              style={{ backgroundColor:!canSubmit?C.faint:C.gold, padding:16, alignItems:'center', marginBottom:16 }}>
               {loading
                 ? <ActivityIndicator color="#0F0F0D"/>
                 : <Txt style={{ fontSize:10, fontFamily:'Outfit_900Black', letterSpacing:3, textTransform:'uppercase', color:'#0F0F0D' }}>
