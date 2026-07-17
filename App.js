@@ -3203,11 +3203,11 @@ function StartRoundModal({ visible, roundNum, onStart, onCancel }) {
 
 // ─── Main App ────────────────────────────────────────────────────────────────────
 // ─── Coach Dashboard ───────────────────────────────────────────────────────────
-function CoachDashboard({ session, onSwitchToAthlete, userRole }) {
+function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete }) {
   const isAdmin = userRole === 'admin';
   const [athletes,   setAthletes]  = useState([]);
   const [academies,  setAcademies] = useState([]);
-  const [selected,   setSelected]  = useState(null);
+  const [selected,      setSelected]      = useState(null);
   const [rollsMap,   setRollsMap]  = useState({});
   const [compsMap,   setCompsMap]  = useState({});
   const [daysMap,    setDaysMap]   = useState({});
@@ -3615,6 +3615,14 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole }) {
                     </Cap>
                   )}
                 </View>
+                {/* Log session button */}
+                <TouchableOpacity onPress={()=>onLogForAthlete && onLogForAthlete(sel)} activeOpacity={0.75}
+                  style={{ borderWidth:1, borderColor:`${C.gold}66`, backgroundColor:C.goldDim,
+                    paddingHorizontal:10, paddingVertical:8, alignItems:'center' }}>
+                  <Txt style={{ fontSize:14, marginBottom:2 }}>📋</Txt>
+                  <Txt style={{ fontSize:7, fontFamily:'Outfit_700Bold', letterSpacing:1,
+                    textTransform:'uppercase', color:C.gold }}>Log Session</Txt>
+                </TouchableOpacity>
               </View>
 
               {/* Stats */}
@@ -3915,8 +3923,24 @@ export default function App() {
 
   if (!session) return <AuthScreen onAuth={setSession}/>;
 
+  const [impersonating, setImpersonating] = useState(null);
+
   if (userRole === 'admin' || userRole === 'coach') {
-    if (coachMode) return <CoachDashboard session={session} userRole={userRole} onSwitchToAthlete={()=>setCoachMode(false)}/>;
+    // Coach logging a session for an athlete
+    if (impersonating) return (
+      <AppMain
+        session={session}
+        impersonatedAthlete={impersonating}
+        onStopImpersonating={()=>setImpersonating(null)}
+        onSwitchToCoach={()=>{ setImpersonating(null); setCoachMode(true); }}
+        isCoach/>
+    );
+    if (coachMode) return (
+      <CoachDashboard
+        session={session} userRole={userRole}
+        onSwitchToAthlete={()=>setCoachMode(false)}
+        onLogForAthlete={ath=>setImpersonating(ath)}/>
+    );
     return <AppMain session={session} onSwitchToCoach={()=>setCoachMode(true)} isCoach/>;
   }
 
@@ -3924,7 +3948,7 @@ export default function App() {
 }
 
 // ─── Main App (authenticated) ─────────────────────────────────────────────────
-function AppMain({ session, onSwitchToCoach, isCoach }) {
+function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onStopImpersonating }) {
   // ── Theme state ─────────────────────────────────────────────────────────────
   const [isDark, setIsDark] = useState(true);
   const toggleTheme = () => {
@@ -3976,14 +4000,14 @@ function AppMain({ session, onSwitchToCoach, isCoach }) {
   // ── Load all data from Supabase on mount ─────────────────────────────────
   useEffect(() => {
     if (!session?.user) return;
-    const userId = session.user.id;
     (async () => {
       setLoading(true);
       try {
-        let ath = await db.getAthlete(userId);
-        if (!ath) {
+        // If coach is logging on behalf of an athlete, use that athlete's data
+        let ath = impersonatedAthlete || await db.getAthlete(session.user.id);
+        if (!ath && !impersonatedAthlete) {
           ath = await db.upsertAthlete({
-            user_id: userId,
+            user_id: session.user.id,
             name: session.user.email.split('@')[0],
             belt: 'white', stripes: 0, gym: '',
           });
@@ -4009,7 +4033,7 @@ function AppMain({ session, onSwitchToCoach, isCoach }) {
       } catch (e) { console.error('Load error:', e); }
       setLoading(false);
     })();
-  }, [session]);
+  }, [session, impersonatedAthlete]);
 
   // ── Debounced technique list save ─────────────────────────────────────────
   const techSaveTimer = useRef(null);
@@ -4118,12 +4142,14 @@ function AppMain({ session, onSwitchToCoach, isCoach }) {
       <GSLLogo size={56}/>
       <View style={{ width:30, height:2, backgroundColor:C.gold, marginTop:16, marginBottom:16 }}/>
       <ActivityIndicator color={C.gold} size="large"/>
-      <Cap style={{ marginTop:16 }}>Loading your data…</Cap>
+      <Cap style={{ marginTop:16 }}>
+        {impersonatedAthlete ? `Loading ${impersonatedAthlete.name}'s data…` : 'Loading your data…'}
+      </Cap>
     </View>
   );
 
-  // Show profile chooser if no profiles or explicitly requested
-  if (!profiles.length || !activeProfileId || showProfiles) {
+  // When coach is logging for an athlete, skip the profile chooser
+  if (!impersonatedAthlete && (!profiles.length || !activeProfileId || showProfiles)) {
     return (
       <ProfileScreen
         profiles={profiles} activeProfileId={activeProfileId}
@@ -4147,6 +4173,22 @@ function AppMain({ session, onSwitchToCoach, isCoach }) {
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={C.surface} translucent={false} animated/>
+
+      {/* Impersonation banner — shown when coach is logging for an athlete */}
+      {impersonatedAthlete && (
+        <View style={{ backgroundColor:C.teal, paddingHorizontal:16, paddingVertical:8,
+          flexDirection:'row', alignItems:'center', gap:10 }}>
+          <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:'#fff', flex:1 }}>
+            📋 Logging for {impersonatedAthlete.name}
+          </Txt>
+          <TouchableOpacity onPress={onStopImpersonating} activeOpacity={0.75}
+            style={{ borderWidth:1, borderColor:'rgba(255,255,255,0.5)', paddingHorizontal:10, paddingVertical:4 }}>
+            <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', color:'#fff', letterSpacing:1.5, textTransform:'uppercase' }}>
+              ← Back to Dashboard
+            </Txt>
+          </TouchableOpacity>
+        </View>
+      )}
       {ConfirmDialog_}
 
       {/* ── Header ── */}
