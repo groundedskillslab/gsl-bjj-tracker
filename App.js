@@ -205,8 +205,15 @@ const db = {
     return data || [];
   },
   async upsertRoll(roll) {
-    const { error } = await supabase.from('rolls').upsert(toDbRoll(roll));
-    if (error) console.error('upsertRoll', error);
+    const dbRoll = toDbRoll(roll);
+    if (!dbRoll.athlete_id) {
+      console.error('upsertRoll: missing athlete_id', roll);
+      return;
+    }
+    const { error } = await supabase
+      .from('rolls')
+      .upsert(dbRoll, { onConflict: 'id' });
+    if (error) console.error('upsertRoll error:', error.message, dbRoll.id);
   },
   async deleteRoll(id) {
     await supabase.from('rolls').delete().eq('id', id);
@@ -4034,7 +4041,33 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
     })();
   }, [session, impersonatedAthlete]);
 
-  // ── Debounced technique list save ─────────────────────────────────────────
+  // ── Auto-save competitions to Supabase when they change ──────────────────
+  const prevCompsRef = useRef(null);
+  useEffect(() => {
+    if (!athlete?.id || !competitions.length) return;
+    // Only save if competitions actually changed
+    const current = JSON.stringify(competitions);
+    if (current === prevCompsRef.current) return;
+    prevCompsRef.current = current;
+
+    competitions.forEach(async comp => {
+      try {
+        // Upsert the competition
+        const { rounds, ...compData } = comp;
+        await supabase.from('competitions').upsert({
+          id: compData.id, athlete_id: athlete.id,
+          name: compData.name, date: compData.date,
+          location: compData.location, gi: compData.gi, notes: compData.notes,
+        }, { onConflict: 'id' });
+
+        // Upsert each round
+        if (rounds?.length) {
+          const dbRounds = rounds.map(r => toDbRound(r, comp.id, athlete.id));
+          await supabase.from('competition_rounds').upsert(dbRounds, { onConflict: 'id' });
+        }
+      } catch(e) { console.error('Save competition failed:', e.message); }
+    });
+  }, [competitions, athlete?.id]);
   const techSaveTimer = useRef(null);
   useEffect(() => {
     if (!athlete?.id) return;
@@ -4117,13 +4150,21 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
     };
     setRolls(rs => {
       const next = [finished, ...rs];
-      if (athlete?.id) db.upsertRoll({ ...finished, athleteId: athlete.id }).catch(console.error);
+      const athleteId = athlete?.id;
+      if (athleteId) {
+        db.upsertRoll({ ...finished, athleteId }).catch(e => console.error('Save roll failed:', e.message));
+      } else {
+        console.error('Cannot save roll: no athlete id');
+      }
       return next;
     });
     setActiveRoll(null);
-    // Auto-log today as a training day
+    // Auto-log today as a training day for this athlete
     const todayStr = new Date().toISOString().split('T')[0];
     setTrainingDays(days => days.includes(todayStr) ? days : [...days, todayStr]);
+    if (athlete?.id) {
+      db.logTrainingDay(athlete.id, todayStr).catch(console.error);
+    }
   };
   const togglePause = () => setActiveRoll(r => {
     if (!r) return r;
