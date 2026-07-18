@@ -3891,10 +3891,11 @@ function AuthScreen({ onAuth }) {
 }
 
 export default function App() {
-  const [session,   setSession]   = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [userRole,  setUserRole]  = useState(null);
-  const [coachMode, setCoachMode] = useState(true);
+  const [session,      setSession]      = useState(null);
+  const [authReady,    setAuthReady]    = useState(false);
+  const [userRole,     setUserRole]     = useState(null);
+  const [coachMode,    setCoachMode]    = useState(true);
+  const [impersonating, setImpersonating] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -3914,6 +3915,7 @@ export default function App() {
     setUserRole(data?.role || 'athlete');
   };
 
+  // All early returns AFTER all hooks
   if (!authReady || (session && userRole === null)) return (
     <View style={{ flex:1, backgroundColor:C.bg, alignItems:'center', justifyContent:'center' }}>
       <StatusBar barStyle="light-content"/>
@@ -3923,10 +3925,7 @@ export default function App() {
 
   if (!session) return <AuthScreen onAuth={setSession}/>;
 
-  const [impersonating, setImpersonating] = useState(null);
-
   if (userRole === 'admin' || userRole === 'coach') {
-    // Coach logging a session for an athlete
     if (impersonating) return (
       <AppMain
         session={session}
