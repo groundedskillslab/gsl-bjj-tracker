@@ -710,6 +710,107 @@ function EventLogPanel({ log=[], onDeleteEvent }) {
   );
 }
 
+// ─── OptionList — stable component outside QuickScoreSheet to prevent keyboard dismissal ─
+// MUST be defined outside QuickScoreSheet — if defined inside, every keystroke causes
+// React to unmount/remount it (new function reference = new component) killing the keyboard.
+function OptionList({ items, onPick, pts, accent, showPts=true,
+                      showCustom, customVal, onCustomChange, onCustomSubmit,
+                      onOpenCustom, onCloseCustom, inputRef, scrollRef,
+                      allTechniques=[] }) {
+  const suggestions = customVal.trim().length > 0
+    ? allTechniques.filter(t =>
+        t.toLowerCase().includes(customVal.toLowerCase()) &&
+        !items.includes(t)
+      ).slice(0, 5)
+    : [];
+
+  return (
+    <View style={{ flex:1 }}>
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="always">
+        {items.map(item => (
+          <TouchableOpacity key={item} onPress={()=>onPick(item)} activeOpacity={0.75}
+            style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center',
+              padding:12, marginBottom:4, borderWidth:1, borderColor:C.border }}>
+            <Txt style={{ fontSize:13, color:C.textDim, flex:1 }}>{item}</Txt>
+            {showPts && pts !== undefined && (
+              <View style={{ borderWidth:1, borderColor:`${accent}44`, paddingHorizontal:7, paddingVertical:2, marginLeft:8 }}>
+                <Txt style={{ fontSize:9, color:accent, fontFamily:'Outfit_700Bold', letterSpacing:1.5 }}>
+                  {pts>0?`+${pts} PTS`:'0 PTS'}
+                </Txt>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
+        <View style={{ height:8 }}/>
+      </ScrollView>
+
+      {/* Pinned custom input — outside ScrollView so keyboard doesn't bury it */}
+      {!showCustom ? (
+        <TouchableOpacity onPress={onOpenCustom} activeOpacity={0.75}
+          style={{ flexDirection:'row', alignItems:'center', padding:14, marginTop:8,
+            borderWidth:1, borderStyle:'dashed', borderColor:C.borderMid }}>
+          <Txt style={{ fontSize:16, color:C.muted, marginRight:10 }}>+</Txt>
+          <Cap>Custom technique…</Cap>
+        </TouchableOpacity>
+      ) : (
+        <View style={{ borderTopWidth:1, borderTopColor:C.borderMid, paddingTop:12, marginTop:4 }}>
+          <Cap style={{ marginBottom:8, color:accent }}>Type your technique</Cap>
+
+          {/* Predictive suggestions */}
+          {suggestions.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="always" style={{ marginBottom:10 }}>
+              <View style={{ flexDirection:'row', gap:6 }}>
+                {suggestions.map(s => (
+                  <TouchableOpacity key={s}
+                    onPress={()=>{ onCustomChange(''); onCloseCustom(); onPick(s); }}
+                    activeOpacity={0.75}
+                    style={{ borderWidth:1, borderColor:`${accent}55`, backgroundColor:`${accent}12`,
+                      paddingHorizontal:10, paddingVertical:7, flexDirection:'row', alignItems:'center', gap:4 }}>
+                    <Txt style={{ fontSize:9, color:accent }}>↑</Txt>
+                    <Txt style={{ fontSize:11, color:accent, fontFamily:'Outfit_600SemiBold' }}>{s}</Txt>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* Text input — stable reference, keyboard stays open */}
+          <View style={{ flexDirection:'row', alignItems:'center', borderWidth:2, borderColor:accent }}>
+            <TextInput
+              ref={inputRef}
+              value={customVal}
+              onChangeText={onCustomChange}
+              placeholder="e.g. Calf Slicer, Twister…"
+              placeholderTextColor={C.muted}
+              returnKeyType="done"
+              blurOnSubmit={false}
+              onSubmitEditing={onCustomSubmit}
+              style={{ flex:1, color:C.text, fontSize:14, fontFamily:'Outfit_400Regular',
+                paddingVertical:14, paddingHorizontal:14 }}
+            />
+            <TouchableOpacity
+              onPress={onCustomSubmit}
+              disabled={!customVal.trim()} activeOpacity={0.75}
+              style={{ backgroundColor:customVal.trim()?accent:C.faint,
+                paddingHorizontal:16, paddingVertical:14 }}>
+              <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black',
+                color:customVal.trim()?'#0F0F0D':C.muted, letterSpacing:1.5, textTransform:'uppercase' }}>Add</Txt>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity onPress={onCloseCustom}
+            style={{ paddingVertical:10, alignItems:'center' }} activeOpacity={0.7}>
+            <Cap style={{ color:C.muted }}>Cancel</Cap>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
 // ─── Quick Score Sheet (Modal bottom sheet) ─────────────────────────────────────
 function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }) {
   const [step,       setStep]       = useState('pick');
@@ -749,98 +850,7 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
     }
   };
 
-  // OptionList: scrollable items + pinned custom input OUTSIDE the scroll
-  const OptionList = ({ items, onPick, pts, accent, showPts=true }) => {
-    // Predictive suggestions: match custom input against all known techniques
-    const suggestions = customVal.trim().length > 0
-      ? allTechniques.filter(t =>
-          t.toLowerCase().includes(customVal.toLowerCase()) &&
-          !items.includes(t) // don't show if already in main list
-        ).slice(0, 5)
-      : [];
 
-    return (
-    <View style={{ flex:1 }}>
-      <ScrollView
-        ref={scrollRef}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="always">
-        {items.map(item => (
-          <TouchableOpacity key={item} onPress={()=>{ setShowCustom(false); onPick(item); }} activeOpacity={0.75}
-            style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:12, marginBottom:4, borderWidth:1, borderColor:C.border }}>
-            <Txt style={{ fontSize:13, color:C.textDim, flex:1 }}>{item}</Txt>
-            {showPts && pts !== undefined && (
-              <View style={{ borderWidth:1, borderColor:`${accent}44`, paddingHorizontal:7, paddingVertical:2, marginLeft:8 }}>
-                <Txt style={{ fontSize:9, color:accent, fontFamily:'Outfit_700Bold', letterSpacing:1.5 }}>{pts>0?`+${pts} PTS`:'0 PTS'}</Txt>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-        <View style={{ height:8 }}/>
-      </ScrollView>
-
-      {/* Pinned custom input + predictive suggestions */}
-      {!showCustom ? (
-        <TouchableOpacity onPress={openCustom} activeOpacity={0.75}
-          style={{ flexDirection:'row', alignItems:'center', padding:14, marginTop:8,
-            borderWidth:1, borderStyle:'dashed', borderColor:C.borderMid }}>
-          <Txt style={{ fontSize:16, color:C.muted, marginRight:10 }}>+</Txt>
-          <Cap>Custom technique…</Cap>
-        </TouchableOpacity>
-      ) : (
-        <View style={{ borderTopWidth:1, borderTopColor:C.borderMid, paddingTop:12, marginTop:4 }}>
-          <Cap style={{ marginBottom:8, color:accent }}>Type your technique</Cap>
-
-          {/* Predictive suggestions */}
-          {suggestions.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="always" style={{ marginBottom:10 }}>
-              <View style={{ flexDirection:'row', gap:6 }}>
-                {suggestions.map(s => (
-                  <TouchableOpacity key={s} onPress={()=>{ setCustomVal(''); setShowCustom(false); onPick(s); }}
-                    activeOpacity={0.75}
-                    style={{ borderWidth:1, borderColor:`${accent}55`, backgroundColor:`${accent}12`,
-                      paddingHorizontal:10, paddingVertical:7, flexDirection:'row', alignItems:'center', gap:4 }}>
-                    <Txt style={{ fontSize:9, color:accent }}>↑</Txt>
-                    <Txt style={{ fontSize:11, color:accent, fontFamily:'Outfit_600SemiBold' }}>{s}</Txt>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          )}
-
-          {/* Text input */}
-          <View style={{ flexDirection:'row', alignItems:'center', borderWidth:2, borderColor:accent }}>
-            <TextInput
-              ref={inputRef}
-              value={customVal}
-              onChangeText={setCustomVal}
-              placeholder="e.g. Calf Slicer, Twister…"
-              placeholderTextColor={C.muted}
-              returnKeyType="done"
-              blurOnSubmit={false}
-              onSubmitEditing={()=>{ if(customVal.trim()) onPick(customVal.trim()); }}
-              style={{ flex:1, color:C.text, fontSize:14, fontFamily:'Outfit_400Regular',
-                paddingVertical:14, paddingHorizontal:14 }}
-            />
-            <TouchableOpacity
-              onPress={()=>{ if(customVal.trim()) onPick(customVal.trim()); }}
-              disabled={!customVal.trim()} activeOpacity={0.75}
-              style={{ backgroundColor:customVal.trim()?accent:C.faint,
-                paddingHorizontal:16, paddingVertical:14 }}>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black',
-                color:customVal.trim()?'#0F0F0D':C.muted, letterSpacing:1.5, textTransform:'uppercase' }}>Add</Txt>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity onPress={()=>{ setShowCustom(false); setCustomVal(''); }}
-            style={{ paddingVertical:10, alignItems:'center' }} activeOpacity={0.7}>
-            <Cap style={{ color:C.muted }}>Cancel</Cap>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-    );
-  };
 
   const stepHeaders = {
     pick:           'Record Score',
@@ -922,22 +932,42 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
               </ScrollView>
             )}
 
-            {step==='sweep_startPos' && <OptionList items={DEF_POS} accent={ac} showPts={false}
-              onPick={pos=>{ setSel1(pos); setStep('sweep_tech'); setShowCustom(false); setCustomVal(''); }}/>}
-            {step==='sweep_tech'     && <OptionList items={DEF_SWEEPS} pts={2} accent={ac}
-              onPick={tech=>finish('sweep', { technique:tech, fromPosition:sel1 })}/>}
-            {step==='td_technique'   && <OptionList items={DEF_TAKEDOWNS} accent={ac} showPts={false}
-              onPick={tech=>{ setSel1(tech); setStep('td_endPos'); setShowCustom(false); setCustomVal(''); }}/>}
-            {step==='td_endPos'      && <OptionList items={DEF_POS} pts={2} accent={ac}
-              onPick={pos=>finish('takedown', { technique:sel1, toPosition:pos })}/>}
-            {step==='gp_guardType'   && <OptionList items={DEF_GUARD_TYPES} accent={ac} showPts={false}
-              onPick={guard=>{ setSel1(guard); setStep('gp_technique'); setShowCustom(false); setCustomVal(''); }}/>}
-            {step==='gp_technique'   && <OptionList items={DEF_GUARD_PASSES} pts={3} accent={ac}
-              onPick={tech=>finish('guardPass', { guardPassed:sel1, technique:tech })}/>}
-            {step==='pull_endPos'    && <OptionList items={DEF_POS} pts={0} accent={ac}
-              onPick={pos=>finish('guardPull', { toPosition:pos })}/>}
-            {step==='adv_type'       && <OptionList items={ADV_TYPES} pts={0} accent={ac}
-              onPick={type=>finish('advantage', { advType:type })}/>}
+
+            {/* All OptionList steps share these keyboard/custom props */}
+            {(step==='sweep_startPos'||step==='sweep_tech'||step==='td_technique'||step==='td_endPos'||step==='gp_guardType'||step==='gp_technique'||step==='pull_endPos'||step==='adv_type') && (() => {
+              const sharedProps = {
+                showCustom, customVal,
+                onCustomChange: v => setCustomVal(v),
+                onOpenCustom: openCustom,
+                onCloseCustom: () => { setShowCustom(false); setCustomVal(''); },
+                inputRef, scrollRef, allTechniques,
+                accent: ac,
+              };
+              if (step==='sweep_startPos') return <OptionList {...sharedProps} items={DEF_POS} showPts={false}
+                onCustomSubmit={()=>{ if(customVal.trim()){ const p=customVal.trim(); setCustomVal(''); setShowCustom(false); setSel1(p); setStep('sweep_tech'); }}}
+                onPick={pos=>{ setSel1(pos); setStep('sweep_tech'); setShowCustom(false); setCustomVal(''); }}/>;
+              if (step==='sweep_tech') return <OptionList {...sharedProps} items={DEF_SWEEPS} pts={2}
+                onCustomSubmit={()=>{ if(customVal.trim()) finish('sweep',{technique:customVal.trim(),fromPosition:sel1}); }}
+                onPick={tech=>finish('sweep',{technique:tech,fromPosition:sel1})}/>;
+              if (step==='td_technique') return <OptionList {...sharedProps} items={DEF_TAKEDOWNS} showPts={false}
+                onCustomSubmit={()=>{ if(customVal.trim()){ const t=customVal.trim(); setCustomVal(''); setShowCustom(false); setSel1(t); setStep('td_endPos'); }}}
+                onPick={tech=>{ setSel1(tech); setStep('td_endPos'); setShowCustom(false); setCustomVal(''); }}/>;
+              if (step==='td_endPos') return <OptionList {...sharedProps} items={DEF_POS} pts={2}
+                onCustomSubmit={()=>{ if(customVal.trim()) finish('takedown',{technique:sel1,toPosition:customVal.trim()}); }}
+                onPick={pos=>finish('takedown',{technique:sel1,toPosition:pos})}/>;
+              if (step==='gp_guardType') return <OptionList {...sharedProps} items={DEF_GUARD_TYPES} showPts={false}
+                onCustomSubmit={()=>{ if(customVal.trim()){ const g=customVal.trim(); setCustomVal(''); setShowCustom(false); setSel1(g); setStep('gp_technique'); }}}
+                onPick={guard=>{ setSel1(guard); setStep('gp_technique'); setShowCustom(false); setCustomVal(''); }}/>;
+              if (step==='gp_technique') return <OptionList {...sharedProps} items={DEF_GUARD_PASSES} pts={3}
+                onCustomSubmit={()=>{ if(customVal.trim()) finish('guardPass',{guardPassed:sel1,technique:customVal.trim()}); }}
+                onPick={tech=>finish('guardPass',{guardPassed:sel1,technique:tech})}/>;
+              if (step==='pull_endPos') return <OptionList {...sharedProps} items={DEF_POS} pts={0}
+                onCustomSubmit={()=>{ if(customVal.trim()) finish('guardPull',{toPosition:customVal.trim()}); }}
+                onPick={pos=>finish('guardPull',{toPosition:pos})}/>;
+              if (step==='adv_type') return <OptionList {...sharedProps} items={ADV_TYPES} pts={0}
+                onCustomSubmit={()=>{ if(customVal.trim()) finish('advantage',{advType:customVal.trim()}); }}
+                onPick={type=>finish('advantage',{advType:type})}/>;
+            })()}
 
           </View>
         </KeyboardAvoidingView>
