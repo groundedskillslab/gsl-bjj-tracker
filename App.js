@@ -3960,7 +3960,12 @@ export default function App() {
   }, []);
 
   const fetchRole = async userId => {
-    const { data } = await supabase.from('user_roles').select('role').eq('user_id', userId).single();
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .single();
+    console.log('fetchRole:', userId, 'data:', JSON.stringify(data), 'error:', error?.message);
     setUserRole(data?.role || 'athlete');
   };
 
