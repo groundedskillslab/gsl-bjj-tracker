@@ -213,16 +213,16 @@ const db = {
   async upsertRoll(roll) {
     const dbRoll = toDbRoll(roll);
     if (!dbRoll.athlete_id) {
-      console.error('upsertRoll: missing athlete_id', JSON.stringify(roll).slice(0,200));
+      console.error('upsertRoll: missing athlete_id');
       return;
     }
     if (!dbRoll.id) {
       console.error('upsertRoll: missing id');
       return;
     }
-    // Try update first, then insert if not found
+    // Use maybeSingle so no error is thrown when row doesn't exist yet
     const { data: existing } = await supabase
-      .from('rolls').select('id').eq('id', dbRoll.id).single();
+      .from('rolls').select('id').eq('id', dbRoll.id).maybeSingle();
     if (existing) {
       const { error } = await supabase.from('rolls').update(dbRoll).eq('id', dbRoll.id);
       if (error) console.error('roll update error:', error.message);
