@@ -138,7 +138,10 @@ const BELT_ORDER      = ['white','blue','purple','brown','black'];
 const TABS            = ['Track','Charts','Rolls','Comps','Profiles'];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-const uid         = () => Math.random().toString(36).slice(2,9);
+const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+  const r = Math.random() * 16 | 0;
+  return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+});
 const fmtSecs     = s => { if(!s) return '0s'; const m=Math.floor(s/60),sc=s%60; return m>0?`${m}m${sc>0?` ${sc}s`:''}` :`${sc}s`; };
 const fmtDateTime = ts => new Date(ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 const fmtTime     = ts => new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
@@ -196,7 +199,10 @@ const db = {
     return data;
   },
   async upsertTechniques(athleteId, lists) {
-    await supabase.from('technique_lists').upsert({ athlete_id: athleteId, ...lists, updated_at: new Date().toISOString() });
+    await supabase.from('technique_lists').upsert(
+      { athlete_id: athleteId, ...lists, updated_at: new Date().toISOString() },
+      { onConflict: 'athlete_id' }
+    );
   },
 
   // ── Rolls ─────────────────────────────────────────────────────────────────────
@@ -235,7 +241,10 @@ const db = {
     return (data || []).map(r => r.date);
   },
   async logTrainingDay(athleteId, date) {
-    await supabase.from('training_days').upsert({ athlete_id: athleteId, date });
+    await supabase.from('training_days').upsert(
+      { athlete_id: athleteId, date },
+      { onConflict: 'athlete_id,date' }
+    );
   },
   async removeTrainingDay(athleteId, date) {
     await supabase.from('training_days').delete().eq('athlete_id', athleteId).eq('date', date);
