@@ -3411,8 +3411,6 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
               {isAdmin ? 'Admin Dashboard' : 'Coach Dashboard'}
             </Txt>
             {isAdmin && <Cap style={{ color:C.gold, fontSize:7 }}>Grounded Skills Lab · All Academies</Cap>}
-            {/* Debug — remove once working */}
-            <Cap style={{ color:C.red, fontSize:7 }}>role: {userRole||'null'}</Cap>
           </View>
           <TouchableOpacity onPress={()=>setIsDark(p=>!p)} activeOpacity={0.75}
             style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.faint, paddingHorizontal:8, paddingVertical:5 }}>
@@ -3992,7 +3990,16 @@ export default function App() {
       <CoachDashboard
         session={session} userRole={userRole}
         onSwitchToAthlete={()=>setCoachMode(false)}
-        onLogForAthlete={ath=>setImpersonating(ath)}/>
+        onLogForAthlete={ath => setImpersonating({
+          // Ensure consistent shape whether from DB or app state
+          id:         ath.id,
+          name:       ath.name,
+          belt:       ath.belt || 'white',
+          stripes:    ath.stripes || 0,
+          gym:        ath.gym || '',
+          user_id:    ath.user_id,
+          academy_id: ath.academy_id,
+        })}/>
     );
     return <AppMain session={session} onSwitchToCoach={()=>setCoachMode(true)} isCoach/>;
   }
@@ -4050,22 +4057,27 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [tab,     setTab]     = useState('Track');
   const [confirm, ConfirmDialog_] = useConfirm();
 
-  // ── Load all data from Supabase on mount ─────────────────────────────────
   useEffect(() => {
     if (!session?.user) return;
     (async () => {
       setLoading(true);
       try {
-        // If coach is logging on behalf of an athlete, use that athlete's data
-        let ath = impersonatedAthlete || await db.getAthlete(session.user.id);
-        if (!ath && !impersonatedAthlete) {
-          ath = await db.upsertAthlete({
-            user_id: session.user.id,
-            name: session.user.email.split('@')[0],
-            belt: 'white', stripes: 0, gym: '',
-          });
+        let ath;
+        if (impersonatedAthlete) {
+          // Use the impersonated athlete directly — no need to fetch
+          ath = impersonatedAthlete;
+        } else {
+          ath = await db.getAthlete(session.user.id);
+          if (!ath) {
+            ath = await db.upsertAthlete({
+              user_id: session.user.id,
+              name: session.user.email.split('@')[0],
+              belt: 'white', stripes: 0, gym: '',
+            });
+          }
         }
         setAthlete(ath);
+
         const techs = await db.getTechniques(ath.id);
         if (techs) {
           if (techs.submissions?.length) setSubmissions(techs.submissions);
