@@ -207,13 +207,23 @@ const db = {
   async upsertRoll(roll) {
     const dbRoll = toDbRoll(roll);
     if (!dbRoll.athlete_id) {
-      console.error('upsertRoll: missing athlete_id', roll);
+      console.error('upsertRoll: missing athlete_id', JSON.stringify(roll).slice(0,200));
       return;
     }
-    const { error } = await supabase
-      .from('rolls')
-      .upsert(dbRoll, { onConflict: 'id' });
-    if (error) console.error('upsertRoll error:', error.message, dbRoll.id);
+    if (!dbRoll.id) {
+      console.error('upsertRoll: missing id');
+      return;
+    }
+    // Try update first, then insert if not found
+    const { data: existing } = await supabase
+      .from('rolls').select('id').eq('id', dbRoll.id).single();
+    if (existing) {
+      const { error } = await supabase.from('rolls').update(dbRoll).eq('id', dbRoll.id);
+      if (error) console.error('roll update error:', error.message);
+    } else {
+      const { error } = await supabase.from('rolls').insert(dbRoll);
+      if (error) console.error('roll insert error:', error.message);
+    }
   },
   async deleteRoll(id) {
     await supabase.from('rolls').delete().eq('id', id);
@@ -3401,6 +3411,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
               {isAdmin ? 'Admin Dashboard' : 'Coach Dashboard'}
             </Txt>
             {isAdmin && <Cap style={{ color:C.gold, fontSize:7 }}>Grounded Skills Lab · All Academies</Cap>}
+            {/* Debug — remove once working */}
+            <Cap style={{ color:C.red, fontSize:7 }}>role: {userRole||'null'}</Cap>
           </View>
           <TouchableOpacity onPress={()=>setIsDark(p=>!p)} activeOpacity={0.75}
             style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.faint, paddingHorizontal:8, paddingVertical:5 }}>
@@ -4144,16 +4156,14 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   // Roll lifecycle
   const isPaused   = !!activeRoll?.paused;
   const startRoll  = partner => setActiveRoll(emptyRoll(partner));
-  const finishRoll = result => {
+  const finishRoll = async result => {
     if (!activeRoll) return;
     const now = Date.now();
 
-    // If ended by submission, winner is determined by who got the sub — ignore points
     const resolvedResult = { ...result };
     if (result.endType === 'submission') {
       resolvedResult.rollResult = result.submissionWinner === 'me' ? 'win' : 'loss';
     } else {
-      // Time expired — determine result by points
       const myPts  = (activeRoll.eventLog||[]).filter(e=>e.side==='me'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
       const oppPts = (activeRoll.eventLog||[]).filter(e=>e.side==='opp'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
       resolvedResult.rollResult = myPts > oppPts ? 'win' : myPts < oppPts ? 'loss' : 'draw';
@@ -4172,28 +4182,33 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
       duration: result.duration || '',
       rollResult: resolvedResult.rollResult,
     };
+
     const finished = {
       ...activeRoll,
       endedAt: now,
       ...resolvedResult,
       eventLog: [...(activeRoll.eventLog || []), endEvent],
     };
-    setRolls(rs => {
-      const next = [finished, ...rs];
-      const athleteId = athlete?.id;
-      if (athleteId) {
-        db.upsertRoll({ ...finished, athleteId }).catch(e => console.error('Save roll failed:', e.message));
-      } else {
-        console.error('Cannot save roll: no athlete id');
+
+    const athleteId = athlete?.id;
+    if (!athleteId) {
+      console.error('finishRoll: no athlete id — roll not saved');
+    } else {
+      try {
+        await db.upsertRoll({ ...finished, athleteId });
+      } catch(e) {
+        console.error('finishRoll save failed:', e.message);
       }
-      return next;
-    });
+    }
+
+    setRolls(rs => [finished, ...rs]);
     setActiveRoll(null);
-    // Auto-log today as a training day for this athlete
+
+    // Auto-log today as a training day
     const todayStr = new Date().toISOString().split('T')[0];
     setTrainingDays(days => days.includes(todayStr) ? days : [...days, todayStr]);
-    if (athlete?.id) {
-      db.logTrainingDay(athlete.id, todayStr).catch(console.error);
+    if (athleteId) {
+      db.logTrainingDay(athleteId, todayStr).catch(console.error);
     }
   };
   const togglePause = () => setActiveRoll(r => {
