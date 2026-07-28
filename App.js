@@ -2898,8 +2898,9 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
   const [activeCompId, setActiveComp]     = useState(null);
   const [activeRoundId, setActiveRound]   = useState(null);
   const [showNewComp, setShowNewComp]     = useState(false);
-  const [editingComp, setEditingComp]     = useState(null);
+  const [editingComp,   setEditingComp]   = useState(null);
   const [showStartRound, setShowStartRound] = useState(false);
+  const [editingRound,  setEditingRound]  = useState(null);
   const [showEndRound, setShowEndRound]   = useState(false);
   const [endMeta, setEndMeta] = useState({ endType:null, result:'win', method:'points', submissionName:'', submissionWinner:'me', matchTime:'' });
 
@@ -3053,7 +3054,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                       ))}
                     </View>
                     <Cap style={{ marginBottom:8 }}>Submission Technique</Cap>
-                    <ScrollView style={{ maxHeight:160, borderWidth:1, borderColor:C.border, marginBottom:12 }} nestedScrollEnabled>
+                    <ScrollView style={{ maxHeight:160, borderWidth:1, borderColor:C.border, marginBottom:8 }} nestedScrollEnabled keyboardShouldPersistTaps="always">
                       {DEF_SUBS.map(sub=>(
                         <TouchableOpacity key={sub} onPress={()=>setEndMeta(m=>({...m,submissionName:sub}))} activeOpacity={0.75}
                           style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:12, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:endMeta.submissionName===sub?C.faint:'transparent' }}>
@@ -3062,6 +3063,24 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
+                    {/* Custom submission technique */}
+                    <View style={{ flexDirection:'row', alignItems:'center', borderWidth:1,
+                      borderColor:endMeta.submissionName&&!DEF_SUBS.includes(endMeta.submissionName)?C.gold:C.borderMid,
+                      marginBottom:12 }}>
+                      <TextInput
+                        value={DEF_SUBS.includes(endMeta.submissionName)?'':endMeta.submissionName||''}
+                        onChangeText={t=>setEndMeta(m=>({...m,submissionName:t}))}
+                        placeholder="Or type custom technique…"
+                        placeholderTextColor={C.muted}
+                        returnKeyType="done"
+                        style={{ flex:1, color:C.text, fontSize:13, fontFamily:'Outfit_400Regular',
+                          padding:12, backgroundColor:'transparent' }}/>
+                      {endMeta.submissionName && !DEF_SUBS.includes(endMeta.submissionName) && (
+                        <View style={{ paddingHorizontal:10 }}>
+                          <Txt style={{ color:C.gold, fontSize:16 }}>✓</Txt>
+                        </View>
+                      )}
+                    </View>
                     <View style={{ marginBottom:16 }}>
                       <Cap style={{ marginBottom:6 }}>Match Duration (optional)</Cap>
                       <TextInput
@@ -3162,6 +3181,13 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                   <Txt style={{ fontSize:9, color:C.border }}>·</Txt>
                   <Txt style={{ fontSize:18, fontFamily:'Outfit_900Black', color:C.stone }}>{rOpPts}</Txt>
                 </View>
+                {/* Edit button */}
+                {!isLive && (
+                  <TouchableOpacity onPress={()=>setEditingRound(round)} activeOpacity={0.75}
+                    style={{ borderLeftWidth:1, borderLeftColor:C.border, paddingHorizontal:12, alignItems:'center', justifyContent:'center' }}>
+                    <Txt style={{ color:C.gold, fontSize:14 }}>✎</Txt>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity onPress={()=>deleteRound(round.id)} activeOpacity={0.75}
                   style={{ borderLeftWidth:1, borderLeftColor:C.border, paddingHorizontal:12, alignItems:'center', justifyContent:'center' }}>
                   <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
@@ -3170,6 +3196,131 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
             );
           })}
         </ScrollView>
+
+        {/* Edit Round Modal */}
+        {editingRound && (
+          <Modal visible={!!editingRound} transparent animationType="fade" onRequestClose={()=>setEditingRound(null)}>
+            <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
+              <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
+                <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
+                  <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold', marginBottom:4 }}>Edit Round</Txt>
+                  <Cap style={{ marginBottom:20, color:C.muted }}>vs {editingRound.opponent||'Unknown'}</Cap>
+
+                  {/* Result */}
+                  <Cap style={{ marginBottom:8 }}>Result</Cap>
+                  <View style={{ flexDirection:'row', gap:8, marginBottom:16 }}>
+                    {Object.entries(RESULT_CFG).map(([k,v])=>(
+                      <TouchableOpacity key={k} onPress={()=>setEditingRound(r=>({...r,result:k}))} activeOpacity={0.75}
+                        style={{ flex:1, paddingVertical:12, borderWidth:2,
+                          borderColor:editingRound.result===k?v.color:C.border,
+                          backgroundColor:editingRound.result===k?`${v.color}18`:'transparent', alignItems:'center' }}>
+                        <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:editingRound.result===k?v.color:C.muted }}>{v.icon} {v.label}</Txt>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* End type */}
+                  <Cap style={{ marginBottom:8 }}>How did it end?</Cap>
+                  <View style={{ flexDirection:'row', gap:8, marginBottom:16 }}>
+                    {[['time','⏱ Time'],['submission','🔒 Submission']].map(([k,l])=>(
+                      <TouchableOpacity key={k} onPress={()=>setEditingRound(r=>({...r,endType:k}))} activeOpacity={0.75}
+                        style={{ flex:1, paddingVertical:10, borderWidth:2,
+                          borderColor:editingRound.endType===k?C.gold:C.border,
+                          backgroundColor:editingRound.endType===k?C.goldDim:'transparent', alignItems:'center' }}>
+                        <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:editingRound.endType===k?C.gold:C.muted }}>{l}</Txt>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Submission details */}
+                  {editingRound.endType === 'submission' && (
+                    <>
+                      <Cap style={{ marginBottom:8 }}>Who got the submission?</Cap>
+                      <View style={{ flexDirection:'row', gap:8, marginBottom:16 }}>
+                        {[['me','I submitted them'],['opp','I was submitted']].map(([val,lbl])=>(
+                          <TouchableOpacity key={val} onPress={()=>setEditingRound(r=>({...r,submissionWinner:val,result:val==='me'?'win':'loss'}))} activeOpacity={0.75}
+                            style={{ flex:1, paddingVertical:10, borderWidth:2,
+                              borderColor:editingRound.submissionWinner===val?(val==='me'?C.sage:C.red):C.border,
+                              backgroundColor:editingRound.submissionWinner===val?(val==='me'?`${C.sage}18`:`${C.red}18`):'transparent', alignItems:'center' }}>
+                            <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold',
+                              color:editingRound.submissionWinner===val?(val==='me'?C.sage:C.red):C.muted }}>{lbl}</Txt>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <Cap style={{ marginBottom:8 }}>Submission Technique</Cap>
+                      <ScrollView style={{ maxHeight:140, borderWidth:1, borderColor:C.border, marginBottom:8 }} nestedScrollEnabled keyboardShouldPersistTaps="always">
+                        {DEF_SUBS.map(sub=>(
+                          <TouchableOpacity key={sub} onPress={()=>setEditingRound(r=>({...r,submissionName:sub}))} activeOpacity={0.75}
+                            style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center',
+                              padding:12, borderBottomWidth:1, borderBottomColor:C.border,
+                              backgroundColor:editingRound.submissionName===sub?C.faint:'transparent' }}>
+                            <Txt style={{ fontSize:13, color:C.textDim }}>{sub}</Txt>
+                            {editingRound.submissionName===sub && <Txt style={{ color:C.gold }}>✓</Txt>}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                      <View style={{ borderWidth:1, borderColor:C.borderMid, marginBottom:16 }}>
+                        <TextInput
+                          value={DEF_SUBS.includes(editingRound.submissionName)?'':editingRound.submissionName||''}
+                          onChangeText={t=>setEditingRound(r=>({...r,submissionName:t}))}
+                          placeholder="Or type custom technique…"
+                          placeholderTextColor={C.muted}
+                          returnKeyType="done"
+                          style={{ color:C.text, fontSize:13, fontFamily:'Outfit_400Regular', padding:12 }}/>
+                      </View>
+                    </>
+                  )}
+
+                  {/* Opponent */}
+                  <Cap style={{ marginBottom:6 }}>Opponent Name</Cap>
+                  <TextInput
+                    value={editingRound.opponent||''}
+                    onChangeText={t=>setEditingRound(r=>({...r,opponent:t}))}
+                    placeholder="Opponent name…" placeholderTextColor={C.muted}
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                      fontFamily:'Outfit_400Regular', padding:12, marginBottom:16 }}/>
+
+                  {/* Match time */}
+                  <Cap style={{ marginBottom:6 }}>Match Duration</Cap>
+                  <TextInput
+                    value={editingRound.matchTime||''}
+                    onChangeText={t=>setEditingRound(r=>({...r,matchTime:t}))}
+                    placeholder="e.g. 5:00" placeholderTextColor={C.muted}
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                      fontFamily:'Outfit_400Regular', padding:12, marginBottom:24 }}/>
+
+                  {/* Notes */}
+                  <Cap style={{ marginBottom:6 }}>Notes</Cap>
+                  <TextInput
+                    value={editingRound.notes||''}
+                    onChangeText={t=>setEditingRound(r=>({...r,notes:t}))}
+                    placeholder="Optional notes…" placeholderTextColor={C.muted}
+                    multiline numberOfLines={3}
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                      fontFamily:'Outfit_400Regular', padding:12, marginBottom:24, minHeight:72 }}/>
+
+                  <View style={{ flexDirection:'row', gap:8 }}>
+                    <TouchableOpacity onPress={()=>{
+                      // Save the edited round back into competitions state
+                      setCompetitions(cs => cs.map(c => ({
+                        ...c,
+                        rounds: c.rounds.map(r => r.id === editingRound.id ? editingRound : r)
+                      })));
+                      setEditingRound(null);
+                    }} activeOpacity={0.8}
+                      style={{ flex:1, backgroundColor:C.gold, padding:16, alignItems:'center' }}>
+                      <Txt style={{ fontSize:10, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:'#0F0F0D' }}>Save Changes</Txt>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={()=>setEditingRound(null)} activeOpacity={0.75}
+                      style={{ borderWidth:1, borderColor:C.border, paddingHorizontal:20, alignItems:'center', justifyContent:'center' }}>
+                      <Cap>Cancel</Cap>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          </Modal>
+        )}
 
         {/* Start round modal */}
         <StartRoundModal visible={showStartRound} roundNum={(activeComp.rounds.length)+1} onStart={startRound} onCancel={()=>setShowStartRound(false)}/>
