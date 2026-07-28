@@ -338,6 +338,8 @@ function fromDbComp(c) {
   return {
     id: c.id, name: c.name, date: c.date, location: c.location,
     gi: c.gi, notes: c.notes,
+    bracketSize: c.bracket_size || '',
+    medal: c.medal || 'none',
     rounds: (c.competition_rounds || []).map(fromDbRound),
   };
 }
@@ -1497,18 +1499,24 @@ function RollCard({ roll, index, onView, onDelete, confirm }) {
   const myPts  = (roll.eventLog||[]).filter(e=>e.side==='me'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
   const oppPts = (roll.eventLog||[]).filter(e=>e.side==='opp'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
   const totalPos = Object.values(roll.posDurations||{}).reduce((a,b)=>a+b,0);
-  // Use stored rollResult if available (handles submission wins regardless of points)
   const res = roll.rollResult ? (roll.rollResult==='win'?'W':roll.rollResult==='loss'?'L':'D') : (myPts>oppPts?'W':myPts<oppPts?'L':'T');
   const rc  = res==='W'?C.sage:res==='L'?C.red:C.amber;
   const isSub = roll.endType==='submission';
+  const dateStr = roll.startedAt ? new Date(roll.startedAt).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'}) : '';
+  const timeStr = roll.startedAt ? new Date(roll.startedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
   return (
     <View style={{ flexDirection:'row', borderWidth:1, borderColor:C.border, marginBottom:8 }}>
       <View style={{ width:3, backgroundColor:rc }}/>
       <TouchableOpacity onPress={()=>onView(roll)} activeOpacity={0.75} style={{ flex:1, padding:14 }}>
         <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start' }}>
           <View style={{ flex:1 }}>
-            <Txt style={{ fontSize:14, fontFamily:'Outfit_700Bold' }}>Roll {String(index).padStart(2,'0')}{roll.partner?<Txt style={{ color:C.muted, fontFamily:'Outfit_400Regular' }}> · {roll.partner}</Txt>:''}</Txt>
-            <Txt style={{ fontSize:9, color:C.muted, marginTop:2 }}>{fmtDateTime(roll.startedAt)}</Txt>
+            <Txt style={{ fontSize:14, fontFamily:'Outfit_700Bold' }}>
+              Roll {String(index).padStart(2,'0')}{roll.partner?<Txt style={{ color:C.muted, fontFamily:'Outfit_400Regular' }}> · {roll.partner}</Txt>:''}
+            </Txt>
+            <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginTop:3 }}>
+              <Txt style={{ fontSize:10, color:C.gold, fontFamily:'Outfit_600SemiBold' }}>{dateStr}</Txt>
+              {timeStr ? <Txt style={{ fontSize:9, color:C.muted }}>@ {timeStr}</Txt> : null}
+            </View>
           </View>
           <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginLeft:8 }}>
             <View style={{ alignItems:'center' }}><Txt style={{ fontSize:20, fontFamily:'Outfit_900Black', color:C.gold, lineHeight:24 }}>{myPts}</Txt><Cap style={{ fontSize:7 }}>You</Cap></View>
@@ -1519,7 +1527,7 @@ function RollCard({ roll, index, onView, onDelete, confirm }) {
         <View style={{ flexDirection:'row', marginTop:10, alignItems:'center' }}>
           {totalPos>0 && <Txt style={{ fontSize:11, color:C.textDim, marginRight:14 }}>{fmtSecs(totalPos)} <Cap style={{ fontSize:8 }}>mat</Cap></Txt>}
           {isSub && <View style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:6, paddingVertical:2, marginRight:6 }}>
-            <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', color:C.red, letterSpacing:1 }}>🔒 SUB</Txt>
+            <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', color:C.red, letterSpacing:1 }}>🔒 {roll.submissionName||'SUB'}</Txt>
           </View>}
           <View style={{ marginLeft:'auto', borderWidth:1, borderColor:`${rc}44`, paddingHorizontal:8, paddingVertical:3 }}>
             <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', color:rc, letterSpacing:2 }}>{res==='W'?'WIN':res==='L'?'LOSS':'DRAW'}</Txt>
@@ -1558,14 +1566,28 @@ function CompetitionsList({ comps, onSelect, onNew }) {
         const draws=comp.rounds.filter(r=>r.result==='draw').length;
         const ov=wins>losses?'W':losses>wins?'L':comp.rounds.length>0?'D':null;
         const oc=wins>losses?C.sage:losses>wins?C.red:C.amber;
+        const medalEmoji = comp.medal==='gold'?'🥇':comp.medal==='silver'?'🥈':comp.medal==='bronze'?'🥉':null;
         return (
           <TouchableOpacity key={comp.id} onPress={()=>onSelect(comp.id)} activeOpacity={0.75}
-            style={{ borderWidth:1, borderColor:C.border, marginBottom:8 }}>
+            style={{ borderWidth:1, borderColor:medalEmoji?`${C.gold}55`:C.border, marginBottom:8,
+              backgroundColor:medalEmoji?C.goldDim:'transparent' }}>
             <View style={{ flexDirection:'row', alignItems:'flex-start', padding:14 }}>
               <View style={{ flex:1 }}>
-                <Txt style={{ fontSize:14, fontFamily:'Outfit_800ExtraBold' }}>{comp.name}</Txt>
-                <Txt style={{ fontSize:9, color:C.muted, marginTop:2, textTransform:'uppercase', letterSpacing:1 }}>{fmtCompDate(comp.date)}{comp.location?` · ${comp.location}`:''} · {comp.gi}</Txt>
-                <View style={{ flexDirection:'row', gap:14, marginTop:10 }}>
+                <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:2 }}>
+                  {medalEmoji && <Txt style={{ fontSize:20 }}>{medalEmoji}</Txt>}
+                  <Txt style={{ fontSize:14, fontFamily:'Outfit_800ExtraBold', flex:1 }}>{comp.name}</Txt>
+                </View>
+                {/* Date + location */}
+                {(comp.date||comp.location) && (
+                  <Txt style={{ fontSize:10, color:C.gold, fontFamily:'Outfit_600SemiBold', marginBottom:2 }}>
+                    {comp.date}{comp.location?` · ${comp.location}`:''}
+                  </Txt>
+                )}
+                <Txt style={{ fontSize:9, color:C.muted, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>
+                  {comp.gi}{comp.weightClass?` · ${comp.weightClass}`:''}
+                  {comp.bracketSize?` · ${comp.bracketSize} competitors`:''}
+                </Txt>
+                <View style={{ flexDirection:'row', gap:14 }}>
                   {[['W',wins,C.sage],['L',losses,C.red],['D',draws,C.amber],['Rounds',comp.rounds.length,C.muted]].map(([lbl,val,clr])=>(
                     <View key={lbl} style={{ alignItems:'center' }}>
                       <Txt style={{ fontSize:16, fontFamily:'Outfit_900Black', color:val>0?clr:C.border }}>{val}</Txt>
@@ -1726,12 +1748,43 @@ function ProfileEditModal({ initial, onSave, onCancel }) {
 
 // ─── Competition Modal ───────────────────────────────────────────────────────────
 function CompModal({ visible, initial, onSave, onCancel }) {
-  const [name,     setName]     = useState(initial?.name||'');
-  const [location, setLocation] = useState(initial?.location||'');
-  const [gi,       setGi]       = useState(initial?.gi||'Gi');
-  const [weight,   setWeight]   = useState(initial?.weightClass||'Middle');
-  useEffect(() => { if(visible){ setName(initial?.name||''); setLocation(initial?.location||''); setGi(initial?.gi||'Gi'); setWeight(initial?.weightClass||'Middle'); }}, [visible]);
-  const save = () => { if(!name.trim()) return; onSave({ ...(initial||{}), id:initial?.id||uid(), name:name.trim(), location:location.trim(), gi, weightClass:weight, rounds:initial?.rounds||[], createdAt:initial?.createdAt||Date.now() }); };
+  const [name,         setName]         = useState(initial?.name||'');
+  const [location,     setLocation]     = useState(initial?.location||'');
+  const [date,         setDate]         = useState(initial?.date||'');
+  const [gi,           setGi]           = useState(initial?.gi||'Gi');
+  const [weight,       setWeight]       = useState(initial?.weightClass||'Middle');
+  const [bracketSize,  setBracketSize]  = useState(initial?.bracketSize||'');
+  const [medal,        setMedal]        = useState(initial?.medal||'none'); // 'none'|'gold'|'silver'|'bronze'
+
+  useEffect(() => {
+    if (visible) {
+      setName(initial?.name||''); setLocation(initial?.location||'');
+      setDate(initial?.date||''); setGi(initial?.gi||'Gi');
+      setWeight(initial?.weightClass||'Middle');
+      setBracketSize(initial?.bracketSize||'');
+      setMedal(initial?.medal||'none');
+    }
+  }, [visible]);
+
+  const save = () => {
+    if (!name.trim()) return;
+    onSave({
+      ...(initial||{}), id:initial?.id||uid(),
+      name:name.trim(), location:location.trim(),
+      date, gi, weightClass:weight,
+      bracketSize: bracketSize ? parseInt(bracketSize)||'' : '',
+      medal,
+      rounds:initial?.rounds||[], createdAt:initial?.createdAt||Date.now()
+    });
+  };
+
+  const MEDALS = [
+    { key:'none',   label:'No Medal', icon:'—',  color:C.muted },
+    { key:'gold',   label:'Gold',     icon:'🥇', color:'#FFD700' },
+    { key:'silver', label:'Silver',   icon:'🥈', color:'#C0C0C0' },
+    { key:'bronze', label:'Bronze',   icon:'🥉', color:'#CD7F32' },
+  ];
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
@@ -1739,34 +1792,70 @@ function CompModal({ visible, initial, onSave, onCancel }) {
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
             <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
             <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold', marginBottom:20 }}>{initial?'Edit Competition':'New Competition'}</Txt>
+
             <FieldInput label="Competition Name *" value={name} onChangeText={setName} placeholder="e.g. IBJJF Pan Championship"/>
             <FieldInput label="Location" value={location} onChangeText={setLocation} placeholder="City, State"/>
-            <View style={{ flexDirection:'row', gap:12, marginBottom:16 }}>
-              <View style={{ flex:1 }}>
-                <Cap style={{ marginBottom:8 }}>Format</Cap>
-                <View style={{ flexDirection:'row', gap:6 }}>
-                  {GI_OPTIONS.map(g=>(
-                    <TouchableOpacity key={g} onPress={()=>setGi(g)} activeOpacity={0.75}
-                      style={{ flex:1, borderWidth:1, borderColor:gi===g?C.gold:C.border, backgroundColor:gi===g?C.goldDim:'transparent', paddingVertical:10, alignItems:'center' }}>
-                      <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:gi===g?C.gold:C.muted }}>{g}</Txt>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+            <FieldInput label="Date" value={date} onChangeText={setDate} placeholder="e.g. March 15, 2025"/>
+
+            {/* Gi/No-Gi */}
+            <View style={{ marginBottom:16 }}>
+              <Cap style={{ marginBottom:8 }}>Format</Cap>
+              <View style={{ flexDirection:'row', gap:6 }}>
+                {GI_OPTIONS.map(g=>(
+                  <TouchableOpacity key={g} onPress={()=>setGi(g)} activeOpacity={0.75}
+                    style={{ flex:1, borderWidth:1, borderColor:gi===g?C.gold:C.border,
+                      backgroundColor:gi===g?C.goldDim:'transparent', paddingVertical:10, alignItems:'center' }}>
+                    <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:gi===g?C.gold:C.muted }}>{g}</Txt>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
-            <View style={{ marginBottom:20 }}>
+
+            {/* Weight class */}
+            <View style={{ marginBottom:16 }}>
               <Cap style={{ marginBottom:8 }}>Weight Class</Cap>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={{ flexDirection:'row', gap:6 }}>
                   {WEIGHT_CLASSES.map(w=>(
                     <TouchableOpacity key={w} onPress={()=>setWeight(w)} activeOpacity={0.75}
-                      style={{ borderWidth:1, borderColor:weight===w?C.gold:C.border, backgroundColor:weight===w?C.goldDim:'transparent', paddingVertical:7, paddingHorizontal:10 }}>
+                      style={{ borderWidth:1, borderColor:weight===w?C.gold:C.border,
+                        backgroundColor:weight===w?C.goldDim:'transparent', paddingVertical:7, paddingHorizontal:10 }}>
                       <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold', color:weight===w?C.gold:C.muted }}>{w}</Txt>
                     </TouchableOpacity>
                   ))}
                 </View>
               </ScrollView>
             </View>
+
+            {/* Bracket size */}
+            <View style={{ marginBottom:16 }}>
+              <Cap style={{ marginBottom:8 }}>Bracket Size (# of competitors)</Cap>
+              <TextInput
+                value={String(bracketSize)}
+                onChangeText={setBracketSize}
+                placeholder="e.g. 8" placeholderTextColor={C.muted}
+                keyboardType="number-pad" returnKeyType="done"
+                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:14,
+                  fontFamily:'Outfit_400Regular', padding:12 }}/>
+            </View>
+
+            {/* Medal */}
+            <View style={{ marginBottom:24 }}>
+              <Cap style={{ marginBottom:8 }}>Medal</Cap>
+              <View style={{ flexDirection:'row', gap:6 }}>
+                {MEDALS.map(m=>(
+                  <TouchableOpacity key={m.key} onPress={()=>setMedal(m.key)} activeOpacity={0.75}
+                    style={{ flex:1, borderWidth:2, borderColor:medal===m.key?m.color:C.border,
+                      backgroundColor:medal===m.key?`${m.color}18`:'transparent',
+                      paddingVertical:10, alignItems:'center' }}>
+                    <Txt style={{ fontSize:16, marginBottom:2 }}>{m.icon}</Txt>
+                    <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold',
+                      color:medal===m.key?m.color:C.muted }}>{m.label}</Txt>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             <View style={{ flexDirection:'row', gap:8 }}>
               <Btn label={initial?'Save Changes':'Create'} onPress={save} style={{ flex:1 }}/>
               <Btn label="Cancel" onPress={onCancel} outline style={{ paddingHorizontal:20 }}/>
@@ -4274,6 +4363,8 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           id: compData.id, athlete_id: athlete.id,
           name: compData.name, date: compData.date,
           location: compData.location, gi: compData.gi, notes: compData.notes,
+          bracket_size: compData.bracketSize || null,
+          medal: compData.medal || 'none',
         }, { onConflict: 'id' });
 
         // Upsert each round
