@@ -4187,21 +4187,31 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
 
   Object.assign(C, isDark ? DARK : LIGHT);
 
-  const AthleteRow = ({ a }) => (
-    <TouchableOpacity key={a.id} onPress={()=>setSelected(a.id)} activeOpacity={0.75}
-      style={{ padding:12, borderBottomWidth:1, borderBottomColor:C.faint,
-        backgroundColor:selected===a.id?C.goldDim:'transparent' }}>
-      <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:4 }}>
-        <ProfileAvatar name={a.name||'?'} size={22} belt={a.belt||'white'}/>
-        <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:selected===a.id?C.gold:C.text, flex:1 }} numberOfLines={1}>{a.name||'Unnamed'}</Txt>
-      </View>
-      <BeltBadge belt={a.belt||'white'} stripes={a.stripes||0} size="sm"/>
-      <View style={{ flexDirection:'row', gap:8, marginTop:4 }}>
-        <Cap style={{ fontSize:6 }}>{(rollsMap[a.id]||[]).length} rolls</Cap>
-        <Cap style={{ fontSize:6 }}>{(daysMap[a.id]||[]).length}d</Cap>
-      </View>
-    </TouchableOpacity>
-  );
+  const AthleteRow = ({ a }) => {
+    const userRole = allUsers.find(u => u.user_id === a.user_id)?.role;
+    const isCoachUser = userRole === 'coach';
+    return (
+      <TouchableOpacity key={a.id} onPress={()=>setSelected(a.id)} activeOpacity={0.75}
+        style={{ padding:12, borderBottomWidth:1, borderBottomColor:C.faint,
+          backgroundColor:selected===a.id?C.goldDim:'transparent' }}>
+        <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:4 }}>
+          <ProfileAvatar name={a.name||'?'} size={22} belt={a.belt||'white'}/>
+          <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:selected===a.id?C.gold:C.text, flex:1 }} numberOfLines={1}>{a.name||'Unnamed'}</Txt>
+          {isCoachUser && (
+            <View style={{ borderWidth:1, borderColor:`${C.teal}55`, backgroundColor:`${C.teal}15`,
+              paddingHorizontal:5, paddingVertical:2 }}>
+              <Txt style={{ fontSize:7, fontFamily:'Outfit_700Bold', color:C.teal, letterSpacing:1 }}>COACH</Txt>
+            </View>
+          )}
+        </View>
+        <BeltBadge belt={a.belt||'white'} stripes={a.stripes||0} size="sm"/>
+        <View style={{ flexDirection:'row', gap:8, marginTop:4 }}>
+          <Cap style={{ fontSize:6 }}>{(rollsMap[a.id]||[]).length} rolls</Cap>
+          <Cap style={{ fontSize:6 }}>{(daysMap[a.id]||[]).length}d</Cap>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={{ flex:1, backgroundColor:C.bg, paddingTop:TOP_INSET }}>
@@ -4580,13 +4590,53 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 padding:14, backgroundColor:C.card, borderWidth:1, borderColor:C.border }}>
                 <ProfileAvatar name={sel?.name||'?'} size={44} belt={sel?.belt||'white'}/>
                 <View style={{ flex:1 }}>
-                  <Txt style={{ fontSize:15, fontFamily:'Outfit_800ExtraBold', color:C.text }}>{sel?.name||'Unnamed'}</Txt>
+                  <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:2 }}>
+                    <Txt style={{ fontSize:15, fontFamily:'Outfit_800ExtraBold', color:C.text }}>{sel?.name||'Unnamed'}</Txt>
+                    {allUsers.find(u=>u.user_id===sel?.user_id)?.role==='coach' && (
+                      <View style={{ borderWidth:1, borderColor:`${C.teal}55`, backgroundColor:`${C.teal}15`,
+                        paddingHorizontal:6, paddingVertical:2 }}>
+                        <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', color:C.teal, letterSpacing:1 }}>COACH</Txt>
+                      </View>
+                    )}
+                  </View>
                   <BeltBadge belt={sel?.belt||'white'} stripes={sel?.stripes||0} size="md"/>
                   {sel?.gym && <Cap style={{ marginTop:4 }}>{sel.gym}</Cap>}
                   {sel?.academy_id && (
                     <Cap style={{ marginTop:4, color:C.gold }}>
                       {academies.find(a=>a.id===sel.academy_id)?.name || ''}
                     </Cap>
+                  )}
+                  {/* Quick belt edit */}
+                  {isAdmin && (
+                    <View style={{ flexDirection:'row', gap:4, marginTop:8, flexWrap:'wrap' }}>
+                      {['white','blue','purple','brown','black'].map(b=>(
+                        <TouchableOpacity key={b} onPress={async()=>{
+                          await supabase.from('athletes').update({belt:b}).eq('id',sel.id);
+                          setAthletes(aths=>aths.map(a=>a.id===sel.id?{...a,belt:b}:a));
+                        }} activeOpacity={0.75}
+                          style={{ paddingHorizontal:8, paddingVertical:4, borderWidth:1,
+                            borderColor:sel?.belt===b?C.gold:C.border,
+                            backgroundColor:sel?.belt===b?C.goldDim:'transparent' }}>
+                          <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold',
+                            color:sel?.belt===b?C.gold:C.muted, textTransform:'capitalize' }}>{b}</Txt>
+                        </TouchableOpacity>
+                      ))}
+                      {/* Stripes */}
+                      <View style={{ flexDirection:'row', gap:4, marginLeft:4 }}>
+                        {[0,1,2,3,4].map(s=>(
+                          <TouchableOpacity key={s} onPress={async()=>{
+                            await supabase.from('athletes').update({stripes:s}).eq('id',sel.id);
+                            setAthletes(aths=>aths.map(a=>a.id===sel.id?{...a,stripes:s}:a));
+                          }} activeOpacity={0.75}
+                            style={{ width:20, height:20, borderWidth:1, alignItems:'center', justifyContent:'center',
+                              borderColor:sel?.stripes===s?C.gold:C.border,
+                              backgroundColor:sel?.stripes===s?C.goldDim:'transparent' }}>
+                            <Txt style={{ fontSize:9, color:sel?.stripes===s?C.gold:C.muted }}>{s}</Txt>
+                          </TouchableOpacity>
+                        ))}
+                        <Cap style={{ alignSelf:'center', fontSize:7 }}>stripes</Cap>
+                      </View>
+                    </View>
                   )}
                 </View>
                 {/* Log session button */}
