@@ -3584,8 +3584,74 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
     return s;
   })();
 
-  // Admin: assign role to a user by email
-  const assignCoach = async (athleteUserId, athleteName) => {
+  const [newAthleteFirst,   setNewAthleteFirst]   = useState('');
+  const [newAthleteLast,    setNewAthleteLast]     = useState('');
+  const [newAthleteEmail,   setNewAthleteEmail]    = useState('');
+  const [newAthleteAcademy, setNewAthleteAcademy] = useState('');
+  const [inviteEmail,       setInviteEmail]        = useState('');
+
+  // Option 2: Create account on behalf of athlete
+  const createAthleteAccount = async () => {
+    if (!newAthleteEmail.trim() || !newAthleteFirst.trim()) return;
+    setManageLoading(true); setManageMsg('');
+    try {
+      const fullName = `${newAthleteFirst.trim()} ${newAthleteLast.trim()}`.trim();
+      // Create user via Supabase admin API (uses service role — won't work from client)
+      // Instead: sign up with a temp password and immediately send password reset
+      const tempPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2).toUpperCase() + '1!';
+      const { data, error } = await supabase.auth.signUp({
+        email: newAthleteEmail.trim(),
+        password: tempPassword,
+        options: { data: { full_name: fullName } },
+      });
+      if (error) throw error;
+
+      if (data?.user) {
+        // Update their athlete name
+        await supabase.from('athletes')
+          .update({ name: fullName, academy_id: newAthleteAcademy || null })
+          .eq('user_id', data.user.id);
+
+        // Send password reset so they can set their own password
+        await supabase.auth.resetPasswordForEmail(newAthleteEmail.trim(), {
+          redirectTo: 'https://bjjanalytics.netlify.app',
+        });
+
+        setManageMsg(`✓ Account created for ${fullName}. A password setup email has been sent to ${newAthleteEmail.trim()}.`);
+        setNewAthleteFirst(''); setNewAthleteLast(''); setNewAthleteEmail(''); setNewAthleteAcademy('');
+
+        // Refresh athlete list
+        const { data: aths } = await supabase.from('athletes').select('*').order('name');
+        setAthletes(aths || []);
+      }
+    } catch(e) {
+      const msg = e?.message || '';
+      if (msg.includes('already registered') || msg.includes('already exists')) {
+        setManageMsg(`❌ An account with ${newAthleteEmail} already exists.`);
+      } else {
+        setManageMsg('❌ Error: ' + (msg || 'Something went wrong'));
+      }
+    }
+    setManageLoading(false);
+  };
+
+  // Option 3: Send invite email
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setManageLoading(true); setManageMsg('');
+    try {
+      // Use password reset as invite mechanism — sends a magic link
+      const { error } = await supabase.auth.resetPasswordForEmail(inviteEmail.trim(), {
+        redirectTo: 'https://bjjanalytics.netlify.app',
+      });
+      if (error) throw error;
+      setManageMsg(`✓ Invite sent to ${inviteEmail.trim()}. They'll receive an email with a link to set up their account.`);
+      setInviteEmail('');
+    } catch(e) {
+      setManageMsg('❌ Error: ' + (e?.message || 'Something went wrong'));
+    }
+    setManageLoading(false);
+  };
     if (!athleteUserId) return;
     setManageLoading(true); setManageMsg('');
     try {
@@ -3698,6 +3764,128 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
 
         /* ── ADMIN MANAGE PANEL ── */
         <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
+
+          {/* ── Option 1: Share signup link ── */}
+          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
+            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
+              <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
+              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 1 · Share Signup Link</Txt>
+            </View>
+            <View style={{ padding:14 }}>
+              <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
+                Share this link with athletes. They sign up themselves with their name, email and password.
+              </Txt>
+              <View style={{ borderWidth:1, borderColor:C.borderMid, backgroundColor:C.faint, padding:12, marginBottom:10 }}>
+                <Txt style={{ fontSize:12, color:C.gold, fontFamily:'Outfit_600SemiBold' }}>
+                  https://bjjanalytics.netlify.app
+                </Txt>
+              </View>
+              <TouchableOpacity onPress={()=>{
+                if(typeof navigator !== 'undefined' && navigator.clipboard) {
+                  navigator.clipboard.writeText('https://bjjanalytics.netlify.app');
+                  setManageMsg('✓ Link copied to clipboard!');
+                  setTimeout(()=>setManageMsg(''), 3000);
+                }
+              }} activeOpacity={0.75}
+                style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, padding:12, alignItems:'center' }}>
+                <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.gold }}>Copy Link</Txt>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ── Option 2: Create account on behalf ── */}
+          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
+            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
+              <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
+              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 2 · Create Account for Athlete</Txt>
+            </View>
+            <View style={{ padding:14 }}>
+              <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
+                Create an account on their behalf. They'll receive a password reset email to set their own password.
+              </Txt>
+              <View style={{ flexDirection:'row', gap:8, marginBottom:10 }}>
+                <View style={{ flex:1 }}>
+                  <Cap style={{ marginBottom:6 }}>First Name</Cap>
+                  <TextInput value={newAthleteFirst} onChangeText={setNewAthleteFirst}
+                    placeholder="First" placeholderTextColor={C.muted} autoCapitalize="words"
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                      fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint }}/>
+                </View>
+                <View style={{ flex:1 }}>
+                  <Cap style={{ marginBottom:6 }}>Last Name</Cap>
+                  <TextInput value={newAthleteLast} onChangeText={setNewAthleteLast}
+                    placeholder="Last" placeholderTextColor={C.muted} autoCapitalize="words"
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                      fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint }}/>
+                </View>
+              </View>
+              <Cap style={{ marginBottom:6 }}>Email</Cap>
+              <TextInput value={newAthleteEmail} onChangeText={setNewAthleteEmail}
+                placeholder="athlete@email.com" placeholderTextColor={C.muted}
+                autoCapitalize="none" keyboardType="email-address"
+                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                  fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint, marginBottom:10 }}/>
+              <Cap style={{ marginBottom:6 }}>Assign to Academy</Cap>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:12 }}>
+                <View style={{ flexDirection:'row', gap:6 }}>
+                  <TouchableOpacity onPress={()=>setNewAthleteAcademy('')} activeOpacity={0.75}
+                    style={{ paddingHorizontal:10, paddingVertical:7, borderWidth:1,
+                      borderColor:!newAthleteAcademy?C.gold:C.border,
+                      backgroundColor:!newAthleteAcademy?C.goldDim:'transparent' }}>
+                    <Txt style={{ fontSize:10, color:!newAthleteAcademy?C.gold:C.muted }}>None</Txt>
+                  </TouchableOpacity>
+                  {academies.map(ac=>(
+                    <TouchableOpacity key={ac.id} onPress={()=>setNewAthleteAcademy(ac.id)} activeOpacity={0.75}
+                      style={{ paddingHorizontal:10, paddingVertical:7, borderWidth:1,
+                        borderColor:newAthleteAcademy===ac.id?C.gold:C.border,
+                        backgroundColor:newAthleteAcademy===ac.id?C.goldDim:'transparent' }}>
+                      <Txt style={{ fontSize:10, color:newAthleteAcademy===ac.id?C.gold:C.muted }}>{ac.name}</Txt>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+              <TouchableOpacity onPress={createAthleteAccount} disabled={manageLoading||!newAthleteEmail.trim()||!newAthleteFirst.trim()} activeOpacity={0.8}
+                style={{ backgroundColor:(!newAthleteEmail.trim()||!newAthleteFirst.trim())?C.faint:C.teal, padding:14, alignItems:'center' }}>
+                {manageLoading
+                  ? <ActivityIndicator color={C.offWhite}/>
+                  : <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:C.offWhite }}>Create Account</Txt>}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ── Option 3: Send invite email ── */}
+          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
+            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
+              <View style={{ width:3, height:14, backgroundColor:C.amber, marginRight:10 }}/>
+              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 3 · Send Invite Email</Txt>
+            </View>
+            <View style={{ padding:14 }}>
+              <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
+                Send an invite link via email. The athlete clicks the link and sets their own password.
+              </Txt>
+              <Cap style={{ marginBottom:6 }}>Email to Invite</Cap>
+              <TextInput value={inviteEmail} onChangeText={setInviteEmail}
+                placeholder="athlete@email.com" placeholderTextColor={C.muted}
+                autoCapitalize="none" keyboardType="email-address"
+                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                  fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint, marginBottom:12 }}/>
+              <TouchableOpacity onPress={sendInvite} disabled={manageLoading||!inviteEmail.trim()} activeOpacity={0.8}
+                style={{ backgroundColor:!inviteEmail.trim()?C.faint:C.amber, padding:14, alignItems:'center' }}>
+                {manageLoading
+                  ? <ActivityIndicator color={C.offWhite}/>
+                  : <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:'#0F0F0D' }}>Send Invite</Txt>}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Status message */}
+          {manageMsg ? (
+            <View style={{ marginBottom:16, padding:12, borderWidth:1,
+              borderColor:manageMsg.startsWith('✓')?`${C.sage}55`:`${C.red}55`,
+              backgroundColor:manageMsg.startsWith('✓')?`${C.sage}15`:`${C.red}15` }}>
+              <Txt style={{ fontSize:12, color:manageMsg.startsWith('✓')?C.sage:C.red }}>{manageMsg}</Txt>
+            </View>
+          ) : null}
 
           {/* Academies */}
           <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
