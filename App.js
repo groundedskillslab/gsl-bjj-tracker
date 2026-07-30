@@ -135,7 +135,7 @@ const RESULT_CFG      = { win:{label:'Win',color:C.sage,icon:'W'}, loss:{label:'
 const METHOD_CFG      = { submission:{label:'Submission',icon:'●'}, points:{label:'Points',icon:'■'}, decision:{label:'Decision',icon:'◆'}, advantage:{label:'Advantage',icon:'+'}, dq:{label:'DQ',icon:'✗'}, walkover:{label:'Walkover',icon:'→'} };
 const BELT_COLORS     = { white:{bg:'#E8E4DC',text:'#1C1C1E',label:'White'}, blue:{bg:'#2A4A7A',text:'#FFFFFF',label:'Blue'}, purple:{bg:'#5A3A7A',text:'#FFFFFF',label:'Purple'}, brown:{bg:'#5A3018',text:'#FFFFFF',label:'Brown'}, black:{bg:'#1C1C1E',text:'#C8A24D',label:'Black'} };
 const BELT_ORDER      = ['white','blue','purple','brown','black'];
-const TABS            = ['Track','Charts','Rolls','Comps','Profiles'];
+const TABS = ['Track','Journal','Charts','Rolls','Comps','Profiles'];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -247,7 +247,32 @@ const db = {
     await supabase.from('training_days').delete().eq('athlete_id', athleteId).eq('date', date);
   },
 
-  // ── Competitions ──────────────────────────────────────────────────────────────
+  // ── Journal ───────────────────────────────────────────────────────────────────
+  async getJournalEntries(athleteId) {
+    const { data } = await supabase.from('journal_entries').select('*')
+      .eq('athlete_id', athleteId).order('date', { ascending: false });
+    return data || [];
+  },
+  async upsertJournalEntry(entry) {
+    if (entry.id) {
+      const { error } = await supabase.from('journal_entries').update({
+        date: entry.date, session_type: entry.sessionType,
+        techniques: entry.techniques, notes: entry.notes,
+        updated_at: new Date().toISOString(),
+      }).eq('id', entry.id);
+      if (error) console.error('journal update error:', error.message);
+    } else {
+      const { error } = await supabase.from('journal_entries').insert({
+        id: uid(), athlete_id: entry.athleteId,
+        date: entry.date, session_type: entry.sessionType,
+        techniques: entry.techniques, notes: entry.notes,
+      });
+      if (error) console.error('journal insert error:', error.message);
+    }
+  },
+  async deleteJournalEntry(id) {
+    await supabase.from('journal_entries').delete().eq('id', id);
+  },
   async getCompetitions(athleteId) {
     const { data } = await supabase
       .from('competitions').select('*, competition_rounds(*)')
@@ -1870,7 +1895,7 @@ function CompModal({ visible, initial, onSave, onCancel }) {
 // ─── Insights Engine ─────────────────────────────────────────────────────────
 // Pure function — takes finished rolls and returns array of insight objects.
 // Called once in ChartsScreen and shared between Insights tab and Submissions tab.
-function generateInsights(rolls, takedowns, sweeps, transitions, positions, competitions) {
+function generateInsights(rolls, takedowns, sweeps, transitions, positions, competitions, journal) {
   if (!rolls || rolls.length < 2) return [];
   const insights = [];
   const tdSet = new Set(takedowns || []);
@@ -2198,11 +2223,477 @@ function generateInsights(rolls, takedowns, sweeps, transitions, positions, comp
     }
   }
 
+  // ── Journal insights ─────────────────────────────────────────────────────────
+  const entries = journal || [];
+  if (entries.length >= 2) {
+    const allTechs = entries.flatMap(e => e.techniques || []);
+
+    // Finish rate by technique
+    const techStats = {};
+    allTechs.forEach(t => {
+      if (!t.name) return;
+      if (!techStats[t.name]) techStats[t.name] = { learned:0, attempted:0, finished:0 };
+      if (t.outcome === 'learned')  techStats[t.name].learned++;
+      if (t.outcome === 'attempted') techStats[t.name].attempted++;
+      if (t.outcome === 'finished')  techStats[t.name].finished++;
+    });
+
+    // High finish rate techniques
+    const highFinish = Object.entries(techStats)
+      .filter(([,v]) => v.attempted + v.finished >= 3 && v.finished / (v.attempted + v.finished) >= 0.5)
+      .sort((a,b) => (b[1].finished/(b[1].attempted+b[1].finished)) - (a[1].finished/(a[1].attempted+a[1].finished)));
+    if (highFinish.length) {
+      const [name, stat] = highFinish[0];
+      const rate = Math.round((stat.finished / (stat.attempted + stat.finished)) * 100);
+      insights.push({
+        icon:'🎯', color:C.sage, category:'journal',
+        title:`${name} is converting`,
+        text:`You finish ${name} ${rate}% of the time in live rolls — your highest-converting logged technique.`,
+        detail:`${stat.finished} finishes from ${stat.attempted + stat.finished} attempts across journal entries.`
+      });
+    }
+
+    // Techniques drilled but never attempted live
+    const learnedNotAttempted = Object.entries(techStats)
+      .filter(([,v]) => v.learned >= 2 && v.attempted === 0 && v.finished === 0);
+    if (learnedNotAttempted.length) {
+      const names = learnedNotAttempted.slice(0,3).map(([n])=>n).join(', ');
+      insights.push({
+        icon:'📚', color:C.amber, category:'journal',
+        title:'Class → roll gap',
+        text:`You've drilled ${names} multiple times in class but haven't attempted ${learnedNotAttempted.length===1?'it':'them'} in live rolls yet.`,
+        detail:`${learnedNotAttempted.length} technique${learnedNotAttempted.length!==1?'s':''} waiting to be tested live.`
+      });
+    }
+
+    // Overall finish rate
+    const totalAttempted = allTechs.filter(t => t.outcome === 'attempted' || t.outcome === 'finished').length;
+    const totalFinished  = allTechs.filter(t => t.outcome === 'finished').length;
+    if (totalAttempted >= 5) {
+      const rate = Math.round((totalFinished / totalAttempted) * 100);
+      insights.push({
+        icon:'📊', color:C.teal, category:'journal',
+        title:`Overall finish rate: ${rate}%`,
+        text:`Across all journal entries you finish ${rate}% of techniques you attempt in live rolls.`,
+        detail:`${totalFinished} finishes from ${totalAttempted} attempts logged.`
+      });
+    }
+
+    // Most practiced technique
+    const mostPracticed = Object.entries(techStats)
+      .sort((a,b) => (b[1].learned+b[1].attempted+b[1].finished) - (a[1].learned+a[1].attempted+a[1].finished))[0];
+    if (mostPracticed) {
+      const [name, stat] = mostPracticed;
+      const total = stat.learned + stat.attempted + stat.finished;
+      if (total >= 3) {
+        insights.push({
+          icon:'🔁', color:C.blue, category:'journal',
+          title:`Most practiced: ${name}`,
+          text:`${name} is your most-logged technique with ${total} appearances across journal sessions.`,
+          detail:`${stat.learned} drilled · ${stat.attempted} attempted · ${stat.finished} finished.`
+        });
+      }
+    }
+  }
+
   return insights;
 }
 
+// ─── Journal Screen ────────────────────────────────────────────────────────────
+const SESSION_TYPES = [
+  { key:'class',       label:'Class',       icon:'📖' },
+  { key:'open_mat',    label:'Open mat',    icon:'🥋' },
+  { key:'drilling',    label:'Drilling',    icon:'🔁' },
+  { key:'competition', label:'Competition', icon:'🏆' },
+];
+
+const OUTCOMES = [
+  { key:'learned',   label:'Learned',  color:'#1D9E75', bg:'#E1F5EE' },
+  { key:'attempted', label:'Tried',    color:'#BA7517', bg:'#FAEEDA' },
+  { key:'finished',  label:'Finished', color:'#993C1D', bg:'#FAECE7' },
+];
+
+function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
+  const today = new Date().toISOString().split('T')[0];
+
+  // New entry form state
+  const [sessionType,  setSessionType]  = useState('class');
+  const [date,         setDate]         = useState(today);
+  const [techniques,   setTechniques]   = useState([{ name:'', outcome:'learned', notes:'' }]);
+  const [sessionNotes, setSessionNotes] = useState('');
+  const [saving,       setSaving]       = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
+
+  // Derived stats
+  const allTechs = journal.flatMap(e => e.techniques || []);
+  const techStats = {};
+  allTechs.forEach(t => {
+    if (!t.name?.trim()) return;
+    if (!techStats[t.name]) techStats[t.name] = { learned:0, attempted:0, finished:0 };
+    techStats[t.name][t.outcome] = (techStats[t.name][t.outcome]||0) + 1;
+  });
+
+  const totalLearned   = allTechs.filter(t=>t.outcome==='learned').length;
+  const totalAttempted = allTechs.filter(t=>t.outcome==='attempted'||t.outcome==='finished').length;
+  const totalFinished  = allTechs.filter(t=>t.outcome==='finished').length;
+
+  // Top techniques by finish rate
+  const topTechs = Object.entries(techStats)
+    .filter(([,v]) => v.attempted + v.finished >= 2)
+    .sort((a,b) => {
+      const ra = a[1].finished / Math.max(a[1].attempted + a[1].finished, 1);
+      const rb = b[1].finished / Math.max(b[1].attempted + b[1].finished, 1);
+      return rb - ra;
+    }).slice(0, 5);
+
+  // Class→roll gap
+  const gapTechs = Object.entries(techStats)
+    .filter(([,v]) => v.learned >= 2 && !v.attempted && !v.finished)
+    .slice(0, 3);
+
+  const addTechRow = () => setTechniques(ts => [...ts, { name:'', outcome:'learned', notes:'' }]);
+  const removeTechRow = i => setTechniques(ts => ts.filter((_,idx)=>idx!==i));
+  const updateTech = (i, field, val) => setTechniques(ts => ts.map((t,idx)=>idx===i?{...t,[field]:val}:t));
+
+  const resetForm = () => {
+    setTechniques([{ name:'', outcome:'learned', notes:'' }]);
+    setSessionNotes(''); setSessionType('class'); setDate(today);
+    setEditingEntry(null);
+  };
+
+  const loadForEdit = entry => {
+    setEditingEntry(entry);
+    setDate(entry.date); setSessionType(entry.sessionType);
+    setTechniques(entry.techniques.length ? entry.techniques : [{ name:'', outcome:'learned', notes:'' }]);
+    setSessionNotes(entry.notes || '');
+  };
+
+  const saveEntry = async () => {
+    const validTechs = techniques.filter(t => t.name.trim());
+    if (!validTechs.length) return;
+    setSaving(true);
+    const entry = {
+      id: editingEntry?.id || uid(),
+      athleteId: athlete?.id,
+      date, sessionType, notes: sessionNotes,
+      techniques: validTechs,
+    };
+    await db.upsertJournalEntry(entry).catch(console.error);
+    setJournal(prev => {
+      const without = prev.filter(e => e.id !== entry.id);
+      return [entry, ...without].sort((a,b)=>b.date.localeCompare(a.date));
+    });
+    resetForm();
+    setSaving(false);
+  };
+
+  const deleteEntry = async id => {
+    await db.deleteJournalEntry(id).catch(console.error);
+    setJournal(prev => prev.filter(e => e.id !== id));
+  };
+
+  const OutcomeBtn = ({ outcome, current, onPress }) => {
+    const cfg = OUTCOMES.find(o=>o.key===outcome);
+    const active = current === outcome;
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.75}
+        style={{ paddingHorizontal:8, paddingVertical:5, borderWidth:1,
+          borderColor: active ? cfg.color : C.border,
+          backgroundColor: active ? cfg.bg : 'transparent' }}>
+        <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', letterSpacing:1,
+          textTransform:'uppercase', color: active ? cfg.color : C.muted }}>{cfg.label}</Txt>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }} keyboardShouldPersistTaps="always">
+
+      {/* Stats strip */}
+      <View style={{ flexDirection:'row', gap:8, marginBottom:16 }}>
+        {[
+          { label:'Techniques learned', value:totalLearned,   color:'#1D9E75' },
+          { label:'Attempted live',     value:totalAttempted, color:'#BA7517' },
+          { label:'Finished',           value:totalFinished,  color:'#993C1D' },
+          { label:'Sessions logged',    value:journal.length, color:C.gold },
+        ].map(({label,value,color})=>(
+          <View key={label} style={{ flex:1, borderWidth:1, borderColor:C.border,
+            backgroundColor:C.card, padding:10, alignItems:'center' }}>
+            <Txt style={{ fontSize:18, fontFamily:'Outfit_900Black', color, lineHeight:22 }}>{value}</Txt>
+            <Cap style={{ fontSize:6, textAlign:'center', marginTop:3 }}>{label}</Cap>
+          </View>
+        ))}
+      </View>
+
+      {/* Log form */}
+      <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
+        <View style={{ flexDirection:'row', alignItems:'center', padding:14,
+          borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
+          <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
+          <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2,
+            textTransform:'uppercase', color:C.textDim, flex:1 }}>
+            {editingEntry ? 'Edit entry' : 'Log techniques'}
+          </Txt>
+          {editingEntry && (
+            <TouchableOpacity onPress={resetForm} activeOpacity={0.75}>
+              <Cap style={{ color:C.muted }}>Cancel edit</Cap>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={{ padding:14 }}>
+
+          {/* Date + session type */}
+          <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+            <View style={{ flex:1 }}>
+              <Cap style={{ marginBottom:6 }}>Date</Cap>
+              <TextInput value={date} onChangeText={setDate}
+                placeholder="YYYY-MM-DD" placeholderTextColor={C.muted}
+                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                  fontFamily:'Outfit_400Regular', padding:10 }}/>
+            </View>
+          </View>
+
+          <Cap style={{ marginBottom:8 }}>Session type</Cap>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }}>
+            <View style={{ flexDirection:'row', gap:6 }}>
+              {SESSION_TYPES.map(st=>(
+                <TouchableOpacity key={st.key} onPress={()=>setSessionType(st.key)} activeOpacity={0.75}
+                  style={{ flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:12, paddingVertical:8,
+                    borderWidth:1, borderColor:sessionType===st.key?C.gold:C.border,
+                    backgroundColor:sessionType===st.key?C.goldDim:'transparent' }}>
+                  <Txt style={{ fontSize:13 }}>{st.icon}</Txt>
+                  <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold',
+                    color:sessionType===st.key?C.gold:C.muted }}>{st.label}</Txt>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+
+          {/* Legend */}
+          <View style={{ flexDirection:'row', gap:12, marginBottom:12 }}>
+            {OUTCOMES.map(o=>(
+              <View key={o.key} style={{ flexDirection:'row', alignItems:'center', gap:4 }}>
+                <View style={{ width:8, height:8, borderRadius:4, backgroundColor:o.color }}/>
+                <Cap style={{ fontSize:8 }}>{o.label}</Cap>
+              </View>
+            ))}
+          </View>
+
+          {/* Technique rows */}
+          {techniques.map((tech, i) => (
+            <View key={i} style={{ marginBottom:10, borderWidth:1, borderColor:C.faint,
+              backgroundColor:C.faint, padding:10 }}>
+              <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:8 }}>
+                {/* Technique name with predictive suggestions */}
+                <View style={{ flex:1 }}>
+                  <TextInput
+                    value={tech.name}
+                    onChangeText={v=>updateTech(i,'name',v)}
+                    placeholder="Technique name…"
+                    placeholderTextColor={C.muted}
+                    returnKeyType="next"
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                      fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.card }}/>
+                  {/* Predictive suggestions */}
+                  {tech.name.trim().length > 0 && (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                      keyboardShouldPersistTaps="always" style={{ marginTop:4 }}>
+                      <View style={{ flexDirection:'row', gap:4 }}>
+                        {allTechniques.filter(t=>
+                          t.toLowerCase().includes(tech.name.toLowerCase()) && t!==tech.name
+                        ).slice(0,4).map(s=>(
+                          <TouchableOpacity key={s} onPress={()=>updateTech(i,'name',s)}
+                            activeOpacity={0.75}
+                            style={{ borderWidth:1, borderColor:`${C.gold}55`,
+                              backgroundColor:C.goldDim, paddingHorizontal:8, paddingVertical:4 }}>
+                            <Txt style={{ fontSize:9, color:C.gold }}>{s}</Txt>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  )}
+                </View>
+                {/* Delete row */}
+                {techniques.length > 1 && (
+                  <TouchableOpacity onPress={()=>removeTechRow(i)} activeOpacity={0.75}
+                    style={{ padding:4 }}>
+                    <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Outcome buttons */}
+              <View style={{ flexDirection:'row', gap:6, marginBottom:6 }}>
+                {OUTCOMES.map(o=>(
+                  <OutcomeBtn key={o.key} outcome={o.key} current={tech.outcome}
+                    onPress={()=>updateTech(i,'outcome',o.key)}/>
+                ))}
+              </View>
+
+              {/* Optional technique note */}
+              <TextInput
+                value={tech.notes||''}
+                onChangeText={v=>updateTech(i,'notes',v)}
+                placeholder="Note (optional)…"
+                placeholderTextColor={C.muted}
+                style={{ borderWidth:1, borderColor:C.border, color:C.text, fontSize:11,
+                  fontFamily:'Outfit_400Regular', padding:8, backgroundColor:C.card }}/>
+            </View>
+          ))}
+
+          {/* Add technique row */}
+          <TouchableOpacity onPress={addTechRow} activeOpacity={0.75}
+            style={{ flexDirection:'row', alignItems:'center', gap:8, padding:10,
+              borderWidth:1, borderStyle:'dashed', borderColor:C.borderMid, marginBottom:12 }}>
+            <Txt style={{ fontSize:18, color:C.muted }}>+</Txt>
+            <Cap>Add technique</Cap>
+          </TouchableOpacity>
+
+          {/* Session notes */}
+          <Cap style={{ marginBottom:6 }}>Session notes</Cap>
+          <TextInput
+            value={sessionNotes}
+            onChangeText={setSessionNotes}
+            placeholder="Coaching cues, things to remember, what clicked today…"
+            placeholderTextColor={C.muted}
+            multiline numberOfLines={3}
+            style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+              fontFamily:'Outfit_400Regular', padding:12, minHeight:70, marginBottom:14,
+              textAlignVertical:'top' }}/>
+
+          <TouchableOpacity onPress={saveEntry} disabled={saving||!techniques.some(t=>t.name.trim())}
+            activeOpacity={0.8}
+            style={{ backgroundColor:techniques.some(t=>t.name.trim())?C.gold:C.faint,
+              padding:14, alignItems:'center' }}>
+            {saving
+              ? <ActivityIndicator color="#0F0F0D"/>
+              : <Txt style={{ fontSize:10, fontFamily:'Outfit_900Black', letterSpacing:2,
+                  textTransform:'uppercase', color:'#0F0F0D' }}>
+                  {editingEntry ? 'Save changes' : 'Save session'}
+                </Txt>}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Insights panel */}
+      {(topTechs.length > 0 || gapTechs.length > 0) && (
+        <View style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, marginBottom:16 }}>
+          <View style={{ flexDirection:'row', alignItems:'center', padding:14,
+            borderBottomWidth:1, borderBottomColor:`${C.gold}33` }}>
+            <Txt style={{ fontSize:14, marginRight:8 }}>💡</Txt>
+            <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2,
+              textTransform:'uppercase', color:C.gold }}>Journal insights</Txt>
+          </View>
+
+          {topTechs.length > 0 && (
+            <View style={{ padding:14, borderBottomWidth:gapTechs.length>0?1:0, borderBottomColor:`${C.gold}22` }}>
+              <Cap style={{ marginBottom:10, color:C.gold }}>Top converting techniques</Cap>
+              {topTechs.map(([name, stat]) => {
+                const total = stat.attempted + stat.finished;
+                const rate = Math.round((stat.finished / total) * 100);
+                const rc = rate>=70?C.sage:rate>=40?C.amber:C.red;
+                return (
+                  <View key={name} style={{ flexDirection:'row', alignItems:'center',
+                    paddingVertical:6, borderBottomWidth:1, borderBottomColor:`${C.gold}15` }}>
+                    <Txt style={{ flex:1, fontSize:12, color:C.text }}>{name}</Txt>
+                    <View style={{ width:60, height:5, backgroundColor:`${C.gold}22`, marginHorizontal:10 }}>
+                      <View style={{ height:5, width:`${rate}%`, backgroundColor:rc }}/>
+                    </View>
+                    <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold', color:rc, width:36, textAlign:'right' }}>{rate}%</Txt>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {gapTechs.length > 0 && (
+            <View style={{ padding:14 }}>
+              <Cap style={{ marginBottom:8, color:C.amber }}>Drilled but not yet attempted live</Cap>
+              {gapTechs.map(([name, stat])=>(
+                <View key={name} style={{ flexDirection:'row', alignItems:'center',
+                  paddingVertical:5, borderBottomWidth:1, borderBottomColor:`${C.gold}15` }}>
+                  <Txt style={{ fontSize:12, color:C.text, flex:1 }}>{name}</Txt>
+                  <Cap style={{ fontSize:8, color:C.amber }}>{stat.learned}x drilled</Cap>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Entry list */}
+      {journal.length > 0 && (
+        <View>
+          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
+            <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
+            <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2,
+              textTransform:'uppercase', color:C.textDim }}>Past entries</Txt>
+          </View>
+          {journal.map(entry => {
+            const st = SESSION_TYPES.find(s=>s.key===entry.sessionType)||SESSION_TYPES[0];
+            return (
+              <View key={entry.id} style={{ borderWidth:1, borderColor:C.border,
+                backgroundColor:C.card, marginBottom:10 }}>
+                <View style={{ flexDirection:'row', alignItems:'center', padding:12,
+                  borderBottomWidth:1, borderBottomColor:C.faint, backgroundColor:C.faint }}>
+                  <Txt style={{ fontSize:13, marginRight:6 }}>{st.icon}</Txt>
+                  <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:C.text, flex:1 }}>
+                    {st.label} · {entry.date}
+                  </Txt>
+                  <TouchableOpacity onPress={()=>loadForEdit(entry)} activeOpacity={0.75}
+                    style={{ padding:6 }}>
+                    <Txt style={{ color:C.gold, fontSize:14 }}>✎</Txt>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={()=>deleteEntry(entry.id)} activeOpacity={0.75}
+                    style={{ padding:6 }}>
+                    <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
+                  </TouchableOpacity>
+                </View>
+                <View style={{ padding:12 }}>
+                  <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6, marginBottom:entry.notes?8:0 }}>
+                    {(entry.techniques||[]).map((t,i)=>{
+                      const o = OUTCOMES.find(o=>o.key===t.outcome)||OUTCOMES[0];
+                      return (
+                        <View key={i} style={{ flexDirection:'row', alignItems:'center', gap:4,
+                          paddingHorizontal:8, paddingVertical:4, borderWidth:1,
+                          borderColor:o.color+'55', backgroundColor:o.bg }}>
+                          <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold', color:o.color }}>
+                            {o.label === 'Learned' ? '📖' : o.label === 'Tried' ? '⚡' : '✅'}
+                          </Txt>
+                          <Txt style={{ fontSize:11, color:o.color, fontFamily:'Outfit_600SemiBold' }}>{t.name}</Txt>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  {entry.notes ? (
+                    <Txt style={{ fontSize:11, color:C.textDim, fontStyle:'italic', lineHeight:16 }}>
+                      "{entry.notes}"
+                    </Txt>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {journal.length === 0 && (
+        <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card,
+          padding:32, alignItems:'center' }}>
+          <Txt style={{ fontSize:28, marginBottom:12 }}>📖</Txt>
+          <Cap style={{ textAlign:'center', marginBottom:8 }}>No journal entries yet</Cap>
+          <Txt style={{ fontSize:12, color:C.muted, textAlign:'center', lineHeight:18 }}>
+            Log the techniques you learn in class, attempt in rolls, and finish — the journal tracks your progress over time.
+          </Txt>
+        </View>
+      )}
+
+    </ScrollView>
+  );
+}
+
 // ─── Charts Screen ────────────────────────────────────────────────────────────
-function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, positions, transitions, takedowns, trainingDays, onLogDay, onRemoveDay }) {
+function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, positions, transitions, takedowns, trainingDays, onLogDay, onRemoveDay, journal }) {
   const [scope,    setScope]    = useState('all');
   const [chartTab, setChartTab] = useState('insights'); // default to insights
   const SCREEN_W_LOCAL = Dimensions.get('window').width - 32;
@@ -2228,7 +2719,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
   const recentRolls= [...rolls].reverse().slice(0,10);
 
   // ── Generate insights once, shared across tabs ───────────────────────────────
-  const insights = generateInsights(rolls, takedowns, sweeps, transitions, positions, competitions);
+  const insights = generateInsights(rolls, takedowns, sweeps, transitions, positions, competitions, journal);
 
   // ── Training days / consistency ──────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
@@ -4488,6 +4979,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [activeRoll,   setActiveRoll]   = useState(null);
   const [competitions, setCompetitions] = useState([]);
   const [trainingDays, setTrainingDays] = useState([]);
+  const [journal,      setJournal]      = useState([]);
   const [showProfiles, setShowProfiles] = useState(false);
 
   const [tab,     setTab]     = useState('Track');
@@ -4523,14 +5015,20 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           if (techs.guard_pulls?.length) setGuardPulls(techs.guard_pulls);
           if (techs.takedowns?.length)   setTakedowns(techs.takedowns);
         }
-        const [dbRolls, dbDays, dbComps] = await Promise.all([
+        const [dbRolls, dbDays, dbComps, dbJournal] = await Promise.all([
           db.getRolls(ath.id),
           db.getTrainingDays(ath.id),
           db.getCompetitions(ath.id),
+          db.getJournalEntries(ath.id),
         ]);
         setRolls(dbRolls.map(fromDbRoll));
         setTrainingDays(dbDays);
         setCompetitions(dbComps);
+        setJournal(dbJournal.map(e => ({
+          id: e.id, athleteId: e.athlete_id,
+          date: e.date, sessionType: e.session_type,
+          techniques: e.techniques || [], notes: e.notes || '',
+        })));
       } catch (e) { console.error('Load error:', e); }
       setLoading(false);
     })();
@@ -4814,12 +5312,19 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           onTogglePause={togglePause} onMutate={mutateActive}
           activeProfile={activeProfile} trackingProps={trackingProps}/>
       )}
+      {tab==='Journal' && (
+        <JournalScreen
+          journal={journal} setJournal={setJournal}
+          athlete={athlete}
+          allTechniques={[...submissions,...sweeps,...positions,...transitions,...guardPulls,...takedowns]}/>
+      )}
       {tab==='Charts' && (
         <ChartsScreen
           rolls={rolls} activeRoll={activeRoll} competitions={competitions}
           submissions={submissions} sweeps={sweeps} positions={positions}
           transitions={transitions} takedowns={takedowns}
-          trainingDays={trainingDays} onLogDay={logDay} onRemoveDay={removeDay}/>
+          trainingDays={trainingDays} onLogDay={logDay} onRemoveDay={removeDay}
+          journal={journal}/>
       )}
       {tab==='Rolls' && (
         <RollsScreen
