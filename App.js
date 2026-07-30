@@ -133,8 +133,43 @@ const WEIGHT_CLASSES  = ["Rooster","Light Feather","Feather","Light","Middle","M
 const GI_OPTIONS      = ["Gi","No-Gi"];
 const RESULT_CFG      = { win:{label:'Win',color:C.sage,icon:'W'}, loss:{label:'Loss',color:C.red,icon:'L'}, draw:{label:'Draw',color:C.amber,icon:'D'} };
 const METHOD_CFG      = { submission:{label:'Submission',icon:'●'}, points:{label:'Points',icon:'■'}, decision:{label:'Decision',icon:'◆'}, advantage:{label:'Advantage',icon:'+'}, dq:{label:'DQ',icon:'✗'}, walkover:{label:'Walkover',icon:'→'} };
-const BELT_COLORS     = { white:{bg:'#E8E4DC',text:'#1C1C1E',label:'White'}, blue:{bg:'#2A4A7A',text:'#FFFFFF',label:'Blue'}, purple:{bg:'#5A3A7A',text:'#FFFFFF',label:'Purple'}, brown:{bg:'#5A3018',text:'#FFFFFF',label:'Brown'}, black:{bg:'#1C1C1E',text:'#C8A24D',label:'Black'} };
-const BELT_ORDER      = ['white','blue','purple','brown','black'];
+const BELT_COLORS = {
+  // Juvenile belts (under 16)
+  'grey-white':  { bg:'#B0B0B0', text:'#1C1C1E', label:'Grey-White',  juvenile:true },
+  'grey':        { bg:'#787878', text:'#FFFFFF',  label:'Grey',        juvenile:true },
+  'grey-black':  { bg:'#3A3A3A', text:'#FFFFFF',  label:'Grey-Black',  juvenile:true },
+  'yellow-white':{ bg:'#E8C840', text:'#1C1C1E',  label:'Yellow-White',juvenile:true },
+  'yellow':      { bg:'#D4A800', text:'#1C1C1E',  label:'Yellow',      juvenile:true },
+  'yellow-black':{ bg:'#8A6E00', text:'#FFFFFF',  label:'Yellow-Black',juvenile:true },
+  'orange-white':{ bg:'#E8924A', text:'#1C1C1E',  label:'Orange-White',juvenile:true },
+  'orange':      { bg:'#D45A00', text:'#FFFFFF',  label:'Orange',      juvenile:true },
+  'orange-black':{ bg:'#8A3A00', text:'#FFFFFF',  label:'Orange-Black',juvenile:true },
+  'green-white': { bg:'#6AAA6A', text:'#1C1C1E',  label:'Green-White', juvenile:true },
+  'green':       { bg:'#2A7A2A', text:'#FFFFFF',  label:'Green',       juvenile:true },
+  'green-black': { bg:'#1A4A1A', text:'#FFFFFF',  label:'Green-Black', juvenile:true },
+  // Adult belts
+  'white':       { bg:'#E8E4DC', text:'#1C1C1E',  label:'White'  },
+  'blue':        { bg:'#2A4A7A', text:'#FFFFFF',  label:'Blue'   },
+  'purple':      { bg:'#5A3A7A', text:'#FFFFFF',  label:'Purple' },
+  'brown':       { bg:'#5A3018', text:'#FFFFFF',  label:'Brown'  },
+  'black':       { bg:'#1C1C1E', text:'#C8A24D',  label:'Black'  },
+  'coral':       { bg:'#C85A3A', text:'#FFFFFF',  label:'Coral'  },
+  'red-black':   { bg:'#8A1A1A', text:'#FFFFFF',  label:'Red-Black' },
+  'red-white':   { bg:'#C82A2A', text:'#FFFFFF',  label:'Red-White' },
+  'red':         { bg:'#8A0000', text:'#FFFFFF',  label:'Red'    },
+};
+
+const BELT_ORDER = [
+  'grey-white','grey','grey-black',
+  'yellow-white','yellow','yellow-black',
+  'orange-white','orange','orange-black',
+  'green-white','green','green-black',
+  'white','blue','purple','brown','black',
+  'coral','red-black','red-white','red',
+];
+
+const JUVENILE_BELTS = BELT_ORDER.filter(b => BELT_COLORS[b]?.juvenile);
+const ADULT_BELTS    = BELT_ORDER.filter(b => !BELT_COLORS[b]?.juvenile);
 const TABS = ['Track','Journal','Charts','Rolls','Comps','Profiles'];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -1740,11 +1775,29 @@ function ProfileEditModal({ initial, onSave, onCancel }) {
             <FieldInput label="Full Name *" value={name} onChangeText={setName} placeholder="First Last"/>
             <View style={{ marginBottom:14 }}>
               <Cap style={{ marginBottom:8 }}>Belt</Cap>
+              <Cap style={{ marginBottom:6, color:C.muted, fontSize:8 }}>Juvenile (under 16)</Cap>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:8 }}>
+                <View style={{ flexDirection:'row', gap:6 }}>
+                  {JUVENILE_BELTS.map(b => { const bc=BELT_COLORS[b]; return (
+                    <TouchableOpacity key={b} onPress={()=>setBelt(b)} activeOpacity={0.75}
+                      style={{ paddingVertical:7, paddingHorizontal:10, borderWidth:2,
+                        borderColor:belt===b?C.gold:C.border,
+                        backgroundColor:belt===b?bc.bg:C.faint }}>
+                      <Txt style={{ fontSize:8, fontFamily:'Outfit_800ExtraBold', letterSpacing:1,
+                        textTransform:'uppercase', color:belt===b?bc.text:C.muted }}>{bc.label}</Txt>
+                    </TouchableOpacity>
+                  ); })}
+                </View>
+              </ScrollView>
+              <Cap style={{ marginBottom:6, color:C.muted, fontSize:8 }}>Adult</Cap>
               <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6 }}>
-                {BELT_ORDER.map(b => { const bc=BELT_COLORS[b]; return (
+                {ADULT_BELTS.map(b => { const bc=BELT_COLORS[b]; return (
                   <TouchableOpacity key={b} onPress={()=>setBelt(b)} activeOpacity={0.75}
-                    style={{ paddingVertical:8, paddingHorizontal:12, borderWidth:2, borderColor:belt===b?C.gold:C.border, backgroundColor:belt===b?bc.bg:C.faint }}>
-                    <Txt style={{ fontSize:8, fontFamily:'Outfit_800ExtraBold', letterSpacing:1.5, textTransform:'uppercase', color:belt===b?bc.text:C.muted }}>{bc.label}</Txt>
+                    style={{ paddingVertical:8, paddingHorizontal:12, borderWidth:2,
+                      borderColor:belt===b?C.gold:C.border,
+                      backgroundColor:belt===b?bc.bg:C.faint }}>
+                    <Txt style={{ fontSize:8, fontFamily:'Outfit_800ExtraBold', letterSpacing:1.5,
+                      textTransform:'uppercase', color:belt===b?bc.text:C.muted }}>{bc.label}</Txt>
                   </TouchableOpacity>
                 ); })}
               </View>
@@ -3948,8 +4001,22 @@ function StartRoundModal({ visible, roundNum, onStart, onCancel }) {
             {/* Belt selector */}
             <View style={{ marginBottom:14 }}>
               <Cap style={{ marginBottom:8 }}>Opponent Belt</Cap>
+              <Cap style={{ marginBottom:6, color:C.muted, fontSize:8 }}>Juvenile</Cap>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:8 }}>
+                <View style={{ flexDirection:'row', gap:6 }}>
+                  {JUVENILE_BELTS.map(b => { const bc=BELT_COLORS[b]; return (
+                    <TouchableOpacity key={b} onPress={()=>setOppBelt(b)} activeOpacity={0.75}
+                      style={{ paddingVertical:7, paddingHorizontal:10, borderWidth:2,
+                        borderColor:oppBelt===b?C.gold:C.border, backgroundColor:oppBelt===b?bc.bg:C.faint }}>
+                      <Txt style={{ fontSize:8, fontFamily:'Outfit_800ExtraBold', letterSpacing:1,
+                        textTransform:'uppercase', color:oppBelt===b?bc.text:C.muted }}>{bc.label}</Txt>
+                    </TouchableOpacity>
+                  ); })}
+                </View>
+              </ScrollView>
+              <Cap style={{ marginBottom:6, color:C.muted, fontSize:8 }}>Adult</Cap>
               <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6 }}>
-                {BELT_ORDER.map(b => {
+                {ADULT_BELTS.map(b => {
                   const bc = BELT_COLORS[b];
                   return (
                     <TouchableOpacity key={b} onPress={()=>setOppBelt(b)} activeOpacity={0.75}
@@ -4608,27 +4675,51 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                   )}
                   {/* Quick belt edit */}
                   {isAdmin && (
-                    <View style={{ flexDirection:'row', gap:4, marginTop:8, flexWrap:'wrap' }}>
-                      {['white','blue','purple','brown','black'].map(b=>(
-                        <TouchableOpacity key={b} onPress={async()=>{
-                          await supabase.from('athletes').update({belt:b}).eq('id',sel.id);
-                          setAthletes(aths=>aths.map(a=>a.id===sel.id?{...a,belt:b}:a));
-                        }} activeOpacity={0.75}
-                          style={{ paddingHorizontal:8, paddingVertical:4, borderWidth:1,
-                            borderColor:sel?.belt===b?C.gold:C.border,
-                            backgroundColor:sel?.belt===b?C.goldDim:'transparent' }}>
-                          <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold',
-                            color:sel?.belt===b?C.gold:C.muted, textTransform:'capitalize' }}>{b}</Txt>
-                        </TouchableOpacity>
-                      ))}
+                    <View style={{ marginTop:8 }}>
+                      <Cap style={{ marginBottom:4, fontSize:7, color:C.muted }}>Juvenile</Cap>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:6 }}>
+                        <View style={{ flexDirection:'row', gap:4 }}>
+                          {JUVENILE_BELTS.map(b=>(
+                            <TouchableOpacity key={b} onPress={async()=>{
+                              await supabase.from('athletes').update({belt:b}).eq('id',sel.id);
+                              setAthletes(aths=>aths.map(a=>a.id===sel.id?{...a,belt:b}:a));
+                            }} activeOpacity={0.75}
+                              style={{ paddingHorizontal:6, paddingVertical:3, borderWidth:1,
+                                borderColor:sel?.belt===b?C.gold:C.border,
+                                backgroundColor:sel?.belt===b?BELT_COLORS[b].bg:'transparent' }}>
+                              <Txt style={{ fontSize:7, fontFamily:'Outfit_700Bold',
+                                color:sel?.belt===b?BELT_COLORS[b].text:C.muted, textTransform:'capitalize' }}>
+                                {BELT_COLORS[b].label}
+                              </Txt>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </ScrollView>
+                      <Cap style={{ marginBottom:4, fontSize:7, color:C.muted }}>Adult</Cap>
+                      <View style={{ flexDirection:'row', gap:4, flexWrap:'wrap', marginBottom:6 }}>
+                        {ADULT_BELTS.map(b=>(
+                          <TouchableOpacity key={b} onPress={async()=>{
+                            await supabase.from('athletes').update({belt:b}).eq('id',sel.id);
+                            setAthletes(aths=>aths.map(a=>a.id===sel.id?{...a,belt:b}:a));
+                          }} activeOpacity={0.75}
+                            style={{ paddingHorizontal:8, paddingVertical:4, borderWidth:1,
+                              borderColor:sel?.belt===b?C.gold:C.border,
+                              backgroundColor:sel?.belt===b?BELT_COLORS[b].bg:'transparent' }}>
+                            <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold',
+                              color:sel?.belt===b?BELT_COLORS[b].text:C.muted, textTransform:'capitalize' }}>
+                              {BELT_COLORS[b].label}
+                            </Txt>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                       {/* Stripes */}
-                      <View style={{ flexDirection:'row', gap:4, marginLeft:4 }}>
+                      <View style={{ flexDirection:'row', gap:4 }}>
                         {[0,1,2,3,4].map(s=>(
                           <TouchableOpacity key={s} onPress={async()=>{
                             await supabase.from('athletes').update({stripes:s}).eq('id',sel.id);
                             setAthletes(aths=>aths.map(a=>a.id===sel.id?{...a,stripes:s}:a));
                           }} activeOpacity={0.75}
-                            style={{ width:20, height:20, borderWidth:1, alignItems:'center', justifyContent:'center',
+                            style={{ width:22, height:22, borderWidth:1, alignItems:'center', justifyContent:'center',
                               borderColor:sel?.stripes===s?C.gold:C.border,
                               backgroundColor:sel?.stripes===s?C.goldDim:'transparent' }}>
                             <Txt style={{ fontSize:9, color:sel?.stripes===s?C.gold:C.muted }}>{s}</Txt>
