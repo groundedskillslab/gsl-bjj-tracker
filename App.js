@@ -4059,6 +4059,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   const [athletes,   setAthletes]  = useState([]);
   const [academies,  setAcademies] = useState([]);
   const [selected,      setSelected]      = useState(null);
+  const [sidebarOpen,   setSidebarOpen]   = useState(true);
   const [rollsMap,   setRollsMap]  = useState({});
   const [compsMap,   setCompsMap]  = useState({});
   const [daysMap,    setDaysMap]   = useState({});
@@ -4254,11 +4255,15 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
 
   Object.assign(C, isDark ? DARK : LIGHT);
 
-  const AthleteRow = ({ a }) => {
+  const AthleteRow = ({ a, onSelect }) => {
     const userRole = allUsers.find(u => u.user_id === a.user_id)?.role;
     const isCoachUser = userRole === 'coach';
+    const handlePress = () => {
+      setSelected(a.id);
+      if (onSelect) onSelect(a.id);
+    };
     return (
-      <TouchableOpacity key={a.id} onPress={()=>setSelected(a.id)} activeOpacity={0.75}
+      <TouchableOpacity key={a.id} onPress={handlePress} activeOpacity={0.75}
         style={{ padding:12, borderBottomWidth:1, borderBottomColor:C.faint,
           backgroundColor:selected===a.id?C.goldDim:'transparent' }}>
         <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:4 }}>
@@ -4609,49 +4614,82 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
       ) : (
 
         /* ── ATHLETES VIEW ── */
-        <View style={{ flex:1, flexDirection:'row' }}>
-          {/* Sidebar — grouped by academy */}
-          <View style={{ width:170, borderRightWidth:1, borderRightColor:C.border, backgroundColor:C.surface }}>
-            <View style={{ padding:10, borderBottomWidth:1, borderBottomColor:C.border }}>
-              <Cap style={{ fontSize:7 }}>{athletes.length} athlete{athletes.length!==1?'s':''}</Cap>
-            </View>
-            <ScrollView>
-              {/* Academy groups */}
-              {academyGroups.filter(ag=>ag.athletes.length>0).map(ag=>(
-                <View key={ag.id}>
-                  <View style={{ paddingHorizontal:12, paddingVertical:6, backgroundColor:C.goldDim, borderBottomWidth:1, borderBottomColor:C.border }}>
-                    <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1.5, textTransform:'uppercase', color:C.gold }}>{ag.name}</Txt>
-                    <Cap style={{ fontSize:6 }}>{ag.athletes.length} athlete{ag.athletes.length!==1?'s':''}</Cap>
-                  </View>
-                  {ag.athletes.map(a=><AthleteRow key={a.id} a={a}/>)}
-                </View>
-              ))}
-              {/* Unassigned */}
-              {unassigned.length > 0 && (
-                <View>
-                  <View style={{ paddingHorizontal:12, paddingVertical:6, backgroundColor:C.faint, borderBottomWidth:1, borderBottomColor:C.border }}>
-                    <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1.5, textTransform:'uppercase', color:C.muted }}>Unassigned</Txt>
-                  </View>
-                  {unassigned.map(a=><AthleteRow key={a.id} a={a}/>)}
-                </View>
-              )}
-              {athletes.length === 0 && (
-                <View style={{ padding:16 }}>
-                  <Cap style={{ textAlign:'center', color:C.muted }}>No athletes yet</Cap>
-                </View>
-              )}
-            </ScrollView>
+        <View style={{ flex:1 }}>
+
+          {/* Toggle bar — always visible */}
+          <View style={{ flexDirection:'row', alignItems:'center', gap:8, padding:8,
+            backgroundColor:C.surface, borderBottomWidth:1, borderBottomColor:C.border }}>
+            <TouchableOpacity onPress={()=>setSidebarOpen(o=>!o)} activeOpacity={0.75}
+              style={{ width:32, height:32, borderWidth:1, borderColor:C.border,
+                backgroundColor:C.faint, alignItems:'center', justifyContent:'center' }}
+              accessibilityLabel="Toggle athlete list">
+              <Txt style={{ fontSize:16, color:C.gold }}>☰</Txt>
+            </TouchableOpacity>
+            {/* Breadcrumb */}
+            <Txt style={{ fontSize:11, color:C.muted, flex:1 }} numberOfLines={1}>
+              Athletes{selected && sel ? <Txt style={{ color:C.text }}> / {sel.name}</Txt> : ''}
+            </Txt>
+            {/* Close sidebar on detail tap — hint */}
+            {sidebarOpen && selected && (
+              <TouchableOpacity onPress={()=>setSidebarOpen(false)} activeOpacity={0.75}>
+                <Cap style={{ color:C.gold, fontSize:8 }}>View detail →</Cap>
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Detail panel */}
-          {!selected ? (
-            <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
-              <GSLLogo size={48}/>
-              <View style={{ width:30, height:2, backgroundColor:C.gold, marginVertical:14 }}/>
-              <Cap>Select an athlete to view their data</Cap>
-            </View>
-          ) : (
-            <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
+          <View style={{ flex:1, flexDirection:'row' }}>
+
+            {/* Sidebar — collapsible */}
+            {sidebarOpen && (
+              <View style={{ width:170, borderRightWidth:1, borderRightColor:C.border,
+                backgroundColor:C.surface }}>
+                <View style={{ padding:10, borderBottomWidth:1, borderBottomColor:C.border }}>
+                  <Cap style={{ fontSize:7 }}>{athletes.length} athlete{athletes.length!==1?'s':''}</Cap>
+                </View>
+                <ScrollView>
+                  {academyGroups.filter(ag=>ag.athletes.length>0).map(ag=>(
+                    <View key={ag.id}>
+                      <View style={{ paddingHorizontal:12, paddingVertical:6, backgroundColor:C.goldDim,
+                        borderBottomWidth:1, borderBottomColor:C.border }}>
+                        <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1.5,
+                          textTransform:'uppercase', color:C.gold }}>{ag.name}</Txt>
+                        <Cap style={{ fontSize:6 }}>{ag.athletes.length} athlete{ag.athletes.length!==1?'s':''}</Cap>
+                      </View>
+                      {ag.athletes.map(a=>(
+                        <AthleteRow key={a.id} a={a} onSelect={id=>{ setSelected(id); setSidebarOpen(false); }}/>
+                      ))}
+                    </View>
+                  ))}
+                  {unassigned.length > 0 && (
+                    <View>
+                      <View style={{ paddingHorizontal:12, paddingVertical:6, backgroundColor:C.faint,
+                        borderBottomWidth:1, borderBottomColor:C.border }}>
+                        <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1.5,
+                          textTransform:'uppercase', color:C.muted }}>Unassigned</Txt>
+                      </View>
+                      {unassigned.map(a=>(
+                        <AthleteRow key={a.id} a={a} onSelect={id=>{ setSelected(id); setSidebarOpen(false); }}/>
+                      ))}
+                    </View>
+                  )}
+                  {athletes.length === 0 && (
+                    <View style={{ padding:16 }}>
+                      <Cap style={{ textAlign:'center', color:C.muted }}>No athletes yet</Cap>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Detail panel */}
+            {!selected ? (
+              <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
+                <GSLLogo size={48}/>
+                <View style={{ width:30, height:2, backgroundColor:C.gold, marginVertical:14 }}/>
+                <Cap>{sidebarOpen ? 'Select an athlete to view their data' : 'Tap ☰ to see athletes'}</Cap>
+              </View>
+            ) : (
+              <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
               {/* Athlete header */}
               <View style={{ flexDirection:'row', alignItems:'center', gap:12, marginBottom:16,
                 padding:14, backgroundColor:C.card, borderWidth:1, borderColor:C.border }}>
@@ -4840,7 +4878,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 );
               })()}
             </ScrollView>
-          )}
+            )}
+          </View>
         </View>
       )}
     </View>
