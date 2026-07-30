@@ -3652,6 +3652,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
     }
     setManageLoading(false);
   };
+
+  const assignCoach = async (athleteUserId, athleteName) => {
     if (!athleteUserId) return;
     setManageLoading(true); setManageMsg('');
     try {
