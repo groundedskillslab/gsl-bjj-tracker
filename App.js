@@ -31,33 +31,33 @@ const SIDE_INSET = 0;
 
 // ─── Theme Palettes ────────────────────────────────────────────────────────────
 const DARK = {
-  bg:        '#0F0F0D',
-  surface:   '#161612',
-  card:      '#1E1E1A',
-  border:    '#2E2E28',
-  borderMid: '#3E3E36',
+  bg:        '#0D0D0B',
+  surface:   '#141412',
+  card:      '#1C1C18',
+  border:    '#2C2C26',
+  borderMid: '#3C3C34',
   charcoal:  '#1C1C1E',
-  stone:     '#8E8E82',
+  stone:     '#9A9A8E',
   sand:      '#DCCC86',
   offWhite:  '#F5F3EF',
-  sage:      '#7A8F72',
+  sage:      '#5A9E50',  // brighter green for legibility
   gold:      '#C8A24D',
   goldLight: '#E2C87A',
   goldSoft:  'rgba(200,162,77,0.15)',
   goldDim:   'rgba(200,162,77,0.08)',
-  green:     '#7A8F72',
-  red:       '#9B4040',
-  amber:     '#B89A4A',
-  amberSoft: 'rgba(184,154,74,0.15)',
-  teal:      '#5A7A72',
-  blue:      '#4A6280',
-  opp:       '#6B5E7A',
-  oppSoft:   'rgba(107,94,122,0.15)',
+  green:     '#5A9E50',
+  red:       '#C04040',  // brighter red
+  amber:     '#C8A24D',
+  amberSoft: 'rgba(200,162,77,0.15)',
+  teal:      '#3A9E8E',  // brighter teal
+  blue:      '#5A82A0',
+  opp:       '#8B7A9A',
+  oppSoft:   'rgba(139,122,154,0.15)',
   oppDim:    '#3A3244',
-  text:      '#F0EDE6',
-  textDim:   '#C8C4BC',
-  muted:     '#6A6660',
-  faint:     '#252520',
+  text:      '#F0EDE6',  // warm white — main text
+  textDim:   '#C0BDB5',  // secondary text — clearly readable
+  muted:     '#7A7870',  // muted labels — not too dark
+  faint:     '#222220',
 };
 
 const LIGHT = {
@@ -67,26 +67,26 @@ const LIGHT = {
   border:    '#DEDAD4',
   borderMid: '#C8C4BC',
   charcoal:  '#1C1C1E',
-  stone:     '#6A6660',
+  stone:     '#5A5A56',
   sand:      '#B89A4A',
   offWhite:  '#1C1C1E',
-  sage:      '#4A6E40',
+  sage:      '#2E7E24',  // stronger green
   gold:      '#9A7030',
   goldLight: '#C8A24D',
   goldSoft:  'rgba(154,112,48,0.12)',
   goldDim:   'rgba(154,112,48,0.07)',
-  green:     '#4A6E40',
-  red:       '#8B2A2A',
+  green:     '#2E7E24',
+  red:       '#B03030',  // stronger red
   amber:     '#8A6A20',
   amberSoft: 'rgba(138,106,32,0.12)',
-  teal:      '#2A5A52',
+  teal:      '#1A6A60',  // stronger teal
   blue:      '#2A4A6A',
   opp:       '#5A4A70',
   oppSoft:   'rgba(90,74,112,0.12)',
   oppDim:    '#E8E4F0',
-  text:      '#1C1C1E',
-  textDim:   '#3A3A3C',
-  muted:     '#8A8680',
+  text:      '#1A1A1C',  // near-black for max contrast
+  textDim:   '#3A3A3E',
+  muted:     '#6A6A70',
   faint:     '#E8E4DC',
 };
 
@@ -170,7 +170,14 @@ const BELT_ORDER = [
 
 const JUVENILE_BELTS = BELT_ORDER.filter(b => BELT_COLORS[b]?.juvenile);
 const ADULT_BELTS    = BELT_ORDER.filter(b => !BELT_COLORS[b]?.juvenile);
-const TABS = ['Track','Journal','Charts','Rolls','Comps','Profiles'];
+const TABS = [
+  { key:'Track',    label:'Track',    icon:'🥋' },
+  { key:'Journal',  label:'Journal',  icon:'📖' },
+  { key:'Charts',   label:'Charts',   icon:'📊' },
+  { key:'Rolls',    label:'Rolls',    icon:'⚔️' },
+  { key:'Comps',    label:'Comps',    icon:'🏆' },
+  { key:'Profiles', label:'Profile',  icon:'👤' },
+];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -407,13 +414,19 @@ function fromDbComp(c) {
 }
 
 // ─── Typography helpers ─────────────────────────────────────────────────────────
+// Inter for all UI / body text
+// DM Serif Display for headings, large numbers, scores — more legible at size
 const F = {
-  light:   { fontFamily:'Outfit_400Regular' },
-  regular: { fontFamily:'Outfit_400Regular' },
-  semi:    { fontFamily:'Outfit_600SemiBold' },
-  bold:    { fontFamily:'Outfit_700Bold' },
-  extra:   { fontFamily:'Outfit_800ExtraBold' },
-  black:   { fontFamily:'Outfit_900Black' },
+  body:    'Inter_400Regular',
+  medium:  'Inter_500Medium',
+  semi:    'Inter_600SemiBold',
+  bold:    'Inter_700Bold',
+  display: 'DMSerifDisplay_400Regular',
+  // Aliases so existing fontFamily references still resolve
+  light:   'Inter_400Regular',
+  regular: 'Inter_400Regular',
+  extra:   'Inter_700Bold',
+  black:   'DMSerifDisplay_400Regular',
 };
 
 // ─── Reusable style helpers ─────────────────────────────────────────────────────
@@ -424,20 +437,24 @@ const s = StyleSheet.create({
   flex1:  { flex:1 },
   fill:   { position:'absolute', top:0, left:0, right:0, bottom:0 },
   card:   { backgroundColor:C.card, borderWidth:1, borderColor:C.border },
-  input:  { backgroundColor:'transparent', borderBottomWidth:1, borderBottomColor:C.borderMid, color:C.text, fontSize:14, paddingVertical:10, paddingHorizontal:0, fontFamily:'Outfit_400Regular' },
-  label:  { fontSize:9, letterSpacing:2, textTransform:'uppercase', color:C.muted, fontFamily:'Outfit_700Bold', marginBottom:6 },
+  input:  { backgroundColor:'transparent', borderBottomWidth:1, borderBottomColor:C.borderMid, color:C.text, fontSize:15, paddingVertical:10, paddingHorizontal:0, fontFamily:F.body },
+  label:  { fontSize:10, letterSpacing:1.5, textTransform:'uppercase', color:C.muted, fontFamily:F.semi, marginBottom:6 },
   btn:    { minHeight:48, alignItems:'center', justifyContent:'center', paddingHorizontal:16 },
   btnGold:{ backgroundColor:C.gold, minHeight:48, alignItems:'center', justifyContent:'center', paddingHorizontal:20 },
   btnSage:{ backgroundColor:C.sage, minHeight:48, alignItems:'center', justifyContent:'center', paddingHorizontal:20 },
   btnRed: { backgroundColor:C.red,  minHeight:48, alignItems:'center', justifyContent:'center', paddingHorizontal:20 },
   btnGhost:{ borderWidth:1, borderColor:C.border, minHeight:44, alignItems:'center', justifyContent:'center', paddingHorizontal:16 },
-  btnText:{ fontSize:9, letterSpacing:2.5, textTransform:'uppercase', fontFamily:'Outfit_800ExtraBold' },
+  btnText:{ fontSize:10, letterSpacing:2, textTransform:'uppercase', fontFamily:F.semi },
   tag:    { borderWidth:1, paddingHorizontal:6, paddingVertical:2 },
 });
 
 // ─── Primitive UI components ────────────────────────────────────────────────────
-const Txt  = ({ style, ...p }) => <Text style={[{ fontFamily:'Outfit_400Regular', color:C.text }, style]} {...p}/>;
-const Cap  = ({ style, ...p }) => <Text style={[{ fontFamily:'Outfit_700Bold', fontSize:9, letterSpacing:2, textTransform:'uppercase', color:C.muted }, style]} {...p}/>;
+// Txt  — Inter body text, readable at any size
+// Cap  — Inter semi uppercase label, tighter tracking
+// Num  — DM Serif Display for numbers, scores, stats
+const Txt  = ({ style, ...p }) => <Text style={[{ fontFamily:F.body, fontSize:15, color:C.text, lineHeight:22 }, style]} {...p}/>;
+const Cap  = ({ style, ...p }) => <Text style={[{ fontFamily:F.semi, fontSize:11, letterSpacing:1, textTransform:'uppercase', color:C.muted }, style]} {...p}/>;
+const Num  = ({ style, ...p }) => <Text style={[{ fontFamily:F.display, color:C.text }, style]} {...p}/>;
 const Rule = () => <View style={{ height:1, backgroundColor:C.border, marginVertical:14 }}/>;
 
 // ─── Theme Toggle Button ────────────────────────────────────────────────────────
@@ -449,7 +466,7 @@ function ThemeToggle({ isDark, onToggle }) {
         backgroundColor:C.faint,
         paddingHorizontal:10, paddingVertical:6, borderRadius:2 }}>
       <Txt style={{ fontSize:14, lineHeight:18 }}>{isDark ? '☀️' : '🌙'}</Txt>
-      <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', letterSpacing:1.5,
+      <Txt style={{ fontSize:8, fontFamily:F.semi, letterSpacing:1.5,
         textTransform:'uppercase', color:C.muted }}>
         {isDark ? 'Light' : 'Dark'}
       </Txt>
@@ -465,7 +482,7 @@ function Btn({ label, onPress, color=C.gold, textColor='#0F0F0D', style, disable
         backgroundColor: outline ? 'transparent' : (disabled ? C.faint : color),
         borderWidth: outline ? 1 : 0, borderColor: outline ? C.border : 'transparent',
         opacity: disabled ? 0.45 : 1 }, style]}>
-      <Txt style={{ fontSize:9, letterSpacing:2.5, textTransform:'uppercase', fontFamily:'Outfit_800ExtraBold', color: outline ? C.muted : textColor }}>{label}</Txt>
+      <Txt style={{ fontSize:9, letterSpacing:2.5, textTransform:'uppercase', fontFamily:F.bold, color: outline ? C.muted : textColor }}>{label}</Txt>
     </TouchableOpacity>
   );
 }
@@ -492,10 +509,10 @@ function ConfirmDialog({ visible, message, onConfirm, onCancel, confirmLabel='Co
           <Txt style={{ fontSize:14, lineHeight:22, marginBottom:20, color:C.text }}>{message}</Txt>
           <View style={s.row}>
             <TouchableOpacity onPress={onCancel} activeOpacity={0.75} style={[s.btnGhost, { flex:1, marginRight:8 }]}>
-              <Txt style={{ fontSize:9, letterSpacing:2, textTransform:'uppercase', fontFamily:'Outfit_700Bold', color:C.muted }}>Cancel</Txt>
+              <Txt style={{ fontSize:9, letterSpacing:2, textTransform:'uppercase', fontFamily:F.semi, color:C.muted }}>Cancel</Txt>
             </TouchableOpacity>
             <TouchableOpacity onPress={onConfirm} activeOpacity={0.75} style={[{ flex:1, minHeight:44, alignItems:'center', justifyContent:'center', backgroundColor:confirmColor }]}>
-              <Txt style={{ fontSize:9, letterSpacing:2, textTransform:'uppercase', fontFamily:'Outfit_800ExtraBold', color:C.offWhite }}>{confirmLabel}</Txt>
+              <Txt style={{ fontSize:9, letterSpacing:2, textTransform:'uppercase', fontFamily:F.bold, color:C.offWhite }}>{confirmLabel}</Txt>
             </TouchableOpacity>
           </View>
         </View>
@@ -543,7 +560,7 @@ function BeltBadge({ belt='white', stripes=0, size='sm' }) {
   return (
     <View style={{ flexDirection:'row', alignItems:'center' }}>
       <View style={{ height:h, backgroundColor:bc.bg, borderWidth:1, borderColor:C.border, flexDirection:'row', alignItems:'center', paddingHorizontal: size==='lg'?10:6, minWidth:size==='lg'?80:56 }}>
-        <Txt style={{ fontSize:size==='lg'?9:7, fontFamily:'Outfit_800ExtraBold', letterSpacing:2, textTransform:'uppercase', color:bc.text }}>{bc.label}</Txt>
+        <Txt style={{ fontSize:size==='lg'?9:7, fontFamily:F.bold, letterSpacing:2, textTransform:'uppercase', color:bc.text }}>{bc.label}</Txt>
         {stripes > 0 && (
           <View style={{ flexDirection:'row', gap:2, marginLeft:3 }}>
             {Array.from({ length:stripes }).map((_,i) => (
@@ -562,7 +579,7 @@ function ProfileAvatar({ name='?', size=36, belt='white' }) {
   const initials = name.trim().split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase() || '?';
   return (
     <View style={{ width:size, height:size, backgroundColor:bc.bg, borderWidth:2, borderColor:bc.bg==='#E8E4DC'?C.border:bc.bg, alignItems:'center', justifyContent:'center' }}>
-      <Txt style={{ fontSize:size*0.38, fontFamily:'Outfit_900Black', color:bc.text }}>{initials}</Txt>
+      <Txt style={{ fontSize:size*0.38, fontFamily:F.display, color:bc.text }}>{initials}</Txt>
     </View>
   );
 }
@@ -600,7 +617,7 @@ function Donut({ data, isTime=false, size=180 }) {
           <View key={i} style={{ flexDirection:'row', alignItems:'center', gap:4 }}>
             <View style={{ width:7, height:7, backgroundColor:sl.color }}/>
             <Txt style={{ fontSize:10, color:C.textDim }}>{sl.label} </Txt>
-            <Txt style={{ fontSize:10, color:sl.color, fontFamily:'Outfit_700Bold' }}>{fmt(sl.value)}</Txt>
+            <Txt style={{ fontSize:10, color:sl.color, fontFamily:F.semi }}>{fmt(sl.value)}</Txt>
           </View>
         ))}
       </View>
@@ -633,15 +650,15 @@ function ScoreComparison({ roll, compact=false }) {
   if (compact) return (
     <View style={s.row}>
       <View style={{ backgroundColor:C.goldDim, borderWidth:1, borderColor:`${C.gold}33`, paddingHorizontal:10, paddingVertical:6, alignItems:'center', minWidth:52 }}>
-        <Txt style={{ fontSize:22, fontFamily:'Outfit_900Black', color:C.gold, lineHeight:26 }}>{myPts}</Txt>
+        <Txt style={{ fontSize:22, fontFamily:F.display, color:C.gold, lineHeight:26 }}>{myPts}</Txt>
         <Cap style={{ fontSize:7, color:C.muted }}>You</Cap>
-        {myAdv>0&&<Txt style={{fontSize:8,color:C.sand,fontFamily:'Outfit_700Bold'}}>+{myAdv} adv</Txt>}
+        {myAdv>0&&<Txt style={{fontSize:8,color:C.sand,fontFamily:F.semi}}>+{myAdv} adv</Txt>}
       </View>
-      <Txt style={{ fontSize:11, color:C.border, fontFamily:'Outfit_700Bold', marginHorizontal:10 }}>—</Txt>
+      <Txt style={{ fontSize:11, color:C.border, fontFamily:F.semi, marginHorizontal:10 }}>—</Txt>
       <View style={{ backgroundColor:C.oppSoft, borderWidth:1, borderColor:`${C.opp}33`, paddingHorizontal:10, paddingVertical:6, alignItems:'center', minWidth:52 }}>
-        <Txt style={{ fontSize:22, fontFamily:'Outfit_900Black', color:C.stone, lineHeight:26 }}>{opPts}</Txt>
+        <Txt style={{ fontSize:22, fontFamily:F.display, color:C.stone, lineHeight:26 }}>{opPts}</Txt>
         <Cap style={{ fontSize:7, color:C.muted }}>Opp</Cap>
-        {opAdv>0&&<Txt style={{fontSize:8,color:C.sand,fontFamily:'Outfit_700Bold'}}>+{opAdv} adv</Txt>}
+        {opAdv>0&&<Txt style={{fontSize:8,color:C.sand,fontFamily:F.semi}}>+{opAdv} adv</Txt>}
       </View>
     </View>
   );
@@ -651,21 +668,21 @@ function ScoreComparison({ roll, compact=false }) {
       <View style={{ flexDirection:'row' }}>
         <View style={{ flex:1, backgroundColor:C.faint, padding:16, borderRightWidth:1, borderRightColor:C.border }}>
           <Cap style={{ marginBottom:4 }}>You</Cap>
-          <Txt style={{ fontSize:40, fontFamily:'Outfit_900Black', color:C.gold, lineHeight:44 }}>{myPts}</Txt>
-          {myAdv>0 && <Txt style={{fontSize:10,color:C.sand,fontFamily:'Outfit_700Bold',marginTop:2}}>{myAdv} advantage{myAdv!==1?'s':''}</Txt>}
-          {myGP>0  && <Txt style={{fontSize:10,color:C.sage,fontFamily:'Outfit_700Bold',marginTop:1}}>{myGP} guard pull{myGP!==1?'s':''}</Txt>}
+          <Txt style={{ fontSize:40, fontFamily:F.display, color:C.gold, lineHeight:44 }}>{myPts}</Txt>
+          {myAdv>0 && <Txt style={{fontSize:10,color:C.sand,fontFamily:F.semi,marginTop:2}}>{myAdv} advantage{myAdv!==1?'s':''}</Txt>}
+          {myGP>0  && <Txt style={{fontSize:10,color:C.sage,fontFamily:F.semi,marginTop:1}}>{myGP} guard pull{myGP!==1?'s':''}</Txt>}
         </View>
         <View style={{ flex:1, backgroundColor:C.faint, padding:16, alignItems:'flex-end' }}>
           <Cap style={{ marginBottom:4 }}>Opponent</Cap>
-          <Txt style={{ fontSize:40, fontFamily:'Outfit_900Black', color:C.stone, lineHeight:44 }}>{opPts}</Txt>
-          {opAdv>0 && <Txt style={{fontSize:10,color:C.sand,fontFamily:'Outfit_700Bold',marginTop:2,textAlign:'right'}}>{opAdv} advantage{opAdv!==1?'s':''}</Txt>}
-          {opGP>0  && <Txt style={{fontSize:10,color:C.sage,fontFamily:'Outfit_700Bold',marginTop:1,textAlign:'right'}}>{opGP} guard pull{opGP!==1?'s':''}</Txt>}
+          <Txt style={{ fontSize:40, fontFamily:F.display, color:C.stone, lineHeight:44 }}>{opPts}</Txt>
+          {opAdv>0 && <Txt style={{fontSize:10,color:C.sand,fontFamily:F.semi,marginTop:2,textAlign:'right'}}>{opAdv} advantage{opAdv!==1?'s':''}</Txt>}
+          {opGP>0  && <Txt style={{fontSize:10,color:C.sage,fontFamily:F.semi,marginTop:1,textAlign:'right'}}>{opGP} guard pull{opGP!==1?'s':''}</Txt>}
         </View>
       </View>
       {/* Point-scoring rows */}
       {ptRows.map((row,i) => (
         <View key={row.key} style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:14, paddingVertical:10, borderTopWidth:1, borderTopColor:C.border }}>
-          <Txt style={{ width:36, fontSize:16, fontFamily:'Outfit_900Black', color:row.myPts>0?C.gold:C.faint }}>{row.myPts||'—'}</Txt>
+          <Txt style={{ width:36, fontSize:16, fontFamily:F.display, color:row.myPts>0?C.gold:C.faint }}>{row.myPts||'—'}</Txt>
           <View style={{ flex:1 }}>
             <Cap style={{ textAlign:'center', marginBottom:4 }}>{row.label}</Cap>
             <View style={{ flexDirection:'row', height:3, backgroundColor:C.faint }}>
@@ -677,13 +694,13 @@ function ScoreComparison({ roll, compact=false }) {
               <Cap style={{ fontSize:8 }}>{row.opN}×</Cap>
             </View>
           </View>
-          <Txt style={{ width:36, fontSize:16, fontFamily:'Outfit_900Black', color:row.opPts>0?C.opp:C.faint, textAlign:'right' }}>{row.opPts||'—'}</Txt>
+          <Txt style={{ width:36, fontSize:16, fontFamily:F.display, color:row.opPts>0?C.opp:C.faint, textAlign:'right' }}>{row.opPts||'—'}</Txt>
         </View>
       ))}
       {/* Advantages row — shown if any */}
       {(myAdv>0||opAdv>0) && (
         <View style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:14, paddingVertical:10, borderTopWidth:1, borderTopColor:C.border, backgroundColor:`${C.sand}08` }}>
-          <Txt style={{ width:36, fontSize:16, fontFamily:'Outfit_900Black', color:myAdv>0?C.sand:C.faint }}>{myAdv||'—'}</Txt>
+          <Txt style={{ width:36, fontSize:16, fontFamily:F.display, color:myAdv>0?C.sand:C.faint }}>{myAdv||'—'}</Txt>
           <View style={{ flex:1 }}>
             <Cap style={{ textAlign:'center', marginBottom:4, color:C.sand }}>Advantages</Cap>
             <View style={{ flexDirection:'row', height:3, backgroundColor:C.faint }}>
@@ -691,7 +708,7 @@ function ScoreComparison({ roll, compact=false }) {
               <View style={{ flex:opAdv||0, backgroundColor:C.opp, minWidth:opAdv>0?4:0 }}/>
             </View>
           </View>
-          <Txt style={{ width:36, fontSize:16, fontFamily:'Outfit_900Black', color:opAdv>0?C.opp:C.faint, textAlign:'right' }}>{opAdv||'—'}</Txt>
+          <Txt style={{ width:36, fontSize:16, fontFamily:F.display, color:opAdv>0?C.opp:C.faint, textAlign:'right' }}>{opAdv||'—'}</Txt>
         </View>
       )}
     </View>
@@ -721,12 +738,12 @@ function EventLogPanel({ log=[], onDeleteEvent }) {
                 <View style={{ flex:1 }}>
                   <Cap style={{ color:accent, marginBottom:3 }}>{isSub ? 'Ended by submission' : 'Ended — time expired'}</Cap>
                   {isSub && ev.submissionName ? (
-                    <Txt style={{ fontSize:14, fontFamily:'Outfit_800ExtraBold', color:C.text }}>{ev.submissionName}</Txt>
+                    <Txt style={{ fontSize:14, fontFamily:F.bold, color:C.text }}>{ev.submissionName}</Txt>
                   ) : null}
                   {isSub && ev.submissionWinner ? (
                     <View style={{ marginTop:5, flexDirection:'row' }}>
                       <View style={{ borderWidth:1, borderColor:`${ev.submissionWinner==='me'?C.sage:C.red}55`, paddingHorizontal:7, paddingVertical:3 }}>
-                        <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1.5, textTransform:'uppercase', color:ev.submissionWinner==='me'?C.sage:C.red }}>
+                        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:ev.submissionWinner==='me'?C.sage:C.red }}>
                           {ev.submissionWinner==='me' ? '✓ You tapped them out' : '✗ You tapped out'}
                         </Txt>
                       </View>
@@ -758,24 +775,24 @@ function EventLogPanel({ log=[], onDeleteEvent }) {
             <View style={{ width:4, height:4, backgroundColor:sc, marginTop:7, marginRight:12 }}/>
             <View style={{ flex:1 }}>
               <View style={{ flexDirection:'row', alignItems:'center', flexWrap:'wrap' }}>
-                <Txt style={{ fontSize:13, fontFamily:'Outfit_600SemiBold' }}>{ev.label||ev.item}</Txt>
+                <Txt style={{ fontSize:13, fontFamily:F.medium }}>{ev.label||ev.item}</Txt>
                 {ev.scored && ev.pts > 0 && (
                   <View style={{ marginLeft:8, borderWidth:1, borderColor:`${sc}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                    <Txt style={{ fontSize:8, color:sc, fontFamily:'Outfit_700Bold', letterSpacing:1.5 }}>+{ev.pts} PTS</Txt>
+                    <Txt style={{ fontSize:8, color:sc, fontFamily:F.semi, letterSpacing:1.5 }}>+{ev.pts} PTS</Txt>
                   </View>
                 )}
                 {ev.scored && ev.pts === 0 && (
                   <View style={{ marginLeft:8, borderWidth:1, borderColor:`${C.sand}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                    <Txt style={{ fontSize:8, color:C.sand, fontFamily:'Outfit_700Bold', letterSpacing:1.5 }}>ADV</Txt>
+                    <Txt style={{ fontSize:8, color:C.sand, fontFamily:F.semi, letterSpacing:1.5 }}>ADV</Txt>
                   </View>
                 )}
               </View>
-              {contextStr ? <Txt style={{ fontSize:10, color:C.teal, marginTop:3, fontFamily:'Outfit_600SemiBold' }}>{contextStr}</Txt> : null}
+              {contextStr ? <Txt style={{ fontSize:10, color:C.teal, marginTop:3, fontFamily:F.medium }}>{contextStr}</Txt> : null}
               <View style={{ flexDirection:'row', marginTop:4 }}>
                 <View style={{ borderWidth:1, borderColor:`${tc}33`, paddingHorizontal:4, paddingVertical:1, marginRight:8 }}>
-                  <Txt style={{ fontSize:8, color:tc, letterSpacing:1.5, textTransform:'uppercase', fontFamily:'Outfit_700Bold' }}>{ev.type}</Txt>
+                  <Txt style={{ fontSize:8, color:tc, letterSpacing:1.5, textTransform:'uppercase', fontFamily:F.semi }}>{ev.type}</Txt>
                 </View>
-                <Txt style={{ fontSize:9, color:C.muted }}>{ev.side==='me'?'You':'Opp'} · {fmtTime(ev.ts)}</Txt>
+                <Txt style={{ fontSize:10, color:C.muted }}>{ev.side==='me'?'You':'Opp'} · {fmtTime(ev.ts)}</Txt>
               </View>
             </View>
             {onDeleteEvent && (
@@ -817,7 +834,7 @@ function OptionList({ items, onPick, pts, accent, showPts=true,
             <Txt style={{ fontSize:13, color:C.textDim, flex:1 }}>{item}</Txt>
             {showPts && pts !== undefined && (
               <View style={{ borderWidth:1, borderColor:`${accent}44`, paddingHorizontal:7, paddingVertical:2, marginLeft:8 }}>
-                <Txt style={{ fontSize:9, color:accent, fontFamily:'Outfit_700Bold', letterSpacing:1.5 }}>
+                <Txt style={{ fontSize:9, color:accent, fontFamily:F.semi, letterSpacing:1.5 }}>
                   {pts>0?`+${pts} PTS`:'0 PTS'}
                 </Txt>
               </View>
@@ -851,7 +868,7 @@ function OptionList({ items, onPick, pts, accent, showPts=true,
                     style={{ borderWidth:1, borderColor:`${accent}55`, backgroundColor:`${accent}12`,
                       paddingHorizontal:10, paddingVertical:7, flexDirection:'row', alignItems:'center', gap:4 }}>
                     <Txt style={{ fontSize:9, color:accent }}>↑</Txt>
-                    <Txt style={{ fontSize:11, color:accent, fontFamily:'Outfit_600SemiBold' }}>{s}</Txt>
+                    <Txt style={{ fontSize:11, color:accent, fontFamily:F.medium }}>{s}</Txt>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -869,7 +886,7 @@ function OptionList({ items, onPick, pts, accent, showPts=true,
               returnKeyType="done"
               blurOnSubmit={false}
               onSubmitEditing={onCustomSubmit}
-              style={{ flex:1, color:C.text, fontSize:14, fontFamily:'Outfit_400Regular',
+              style={{ flex:1, color:C.text, fontSize:14, fontFamily:F.body,
                 paddingVertical:14, paddingHorizontal:14 }}
             />
             <TouchableOpacity
@@ -877,7 +894,7 @@ function OptionList({ items, onPick, pts, accent, showPts=true,
               disabled={!customVal.trim()} activeOpacity={0.75}
               style={{ backgroundColor:customVal.trim()?accent:C.faint,
                 paddingHorizontal:16, paddingVertical:14 }}>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black',
+              <Txt style={{ fontSize:9, fontFamily:F.display,
                 color:customVal.trim()?'#0F0F0D':C.muted, letterSpacing:1.5, textTransform:'uppercase' }}>Add</Txt>
             </TouchableOpacity>
           </View>
@@ -983,7 +1000,7 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
                 )}
                 <View>
                   <Cap style={{ marginBottom:2 }}>{isOpp?'Opponent':'You'}</Cap>
-                  <Txt style={{ fontSize:14, fontFamily:'Outfit_700Bold', color:ac }}>{stepHeaders[step]||'Record Score'}</Txt>
+                  <Txt style={{ fontSize:14, fontFamily:F.semi, color:ac }}>{stepHeaders[step]||'Record Score'}</Txt>
                 </View>
               </View>
               <TouchableOpacity onPress={close}
@@ -1001,11 +1018,11 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
                     style={{ flexDirection:'row', alignItems:'center', padding:14, marginBottom:4, borderWidth:1, borderColor:C.border }}>
                     <Txt style={{ fontSize:18, width:26, textAlign:'center', marginRight:14 }}>{ev.icon}</Txt>
                     <View style={{ flex:1 }}>
-                      <Txt style={{ fontSize:13, fontFamily:'Outfit_700Bold' }}>{ev.label}</Txt>
+                      <Txt style={{ fontSize:13, fontFamily:F.semi }}>{ev.label}</Txt>
                       <Cap style={{ marginTop:2, fontSize:8 }}>{ev.desc}</Cap>
                     </View>
                     <View style={{ borderWidth:1, borderColor:`${ev.color}44`, paddingHorizontal:8, paddingVertical:3 }}>
-                      <Txt style={{ fontSize:9, color:ev.color, fontFamily:'Outfit_700Bold', letterSpacing:2 }}>{ev.pts>0?`+${ev.pts} PTS`:'ADV'}</Txt>
+                      <Txt style={{ fontSize:9, color:ev.color, fontFamily:F.semi, letterSpacing:2 }}>{ev.pts>0?`+${ev.pts} PTS`:'ADV'}</Txt>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -1067,10 +1084,10 @@ function CounterCard({ item, count, onAdd, onRemove, disabled, ac=C.gold }) {
       </TouchableOpacity>
       <View style={{ flex:1, paddingVertical:6, paddingHorizontal:8, alignItems:'center' }}>
         <Txt style={{ fontSize:10, color:C.muted, textAlign:'center' }} numberOfLines={1}>{item}</Txt>
-        <Txt style={{ fontSize:26, fontFamily:'Outfit_900Black', color:count>0?ac:C.border, lineHeight:32 }}>{count}</Txt>
+        <Txt style={{ fontSize:26, fontFamily:F.display, color:count>0?ac:C.border, lineHeight:32 }}>{count}</Txt>
       </View>
       <TouchableOpacity onPress={()=>!disabled&&onAdd(item)} activeOpacity={0.7} style={{ paddingHorizontal:14, paddingVertical:10, backgroundColor:disabled?C.faint:ac, alignItems:'center', justifyContent:'center' }}>
-        <Txt style={{ fontSize:20, fontFamily:'Outfit_700Bold', color:disabled?C.muted:'#0F0F0D' }}>+</Txt>
+        <Txt style={{ fontSize:20, fontFamily:F.semi, color:disabled?C.muted:'#0F0F0D' }}>+</Txt>
       </TouchableOpacity>
     </View>
   );
@@ -1081,11 +1098,11 @@ function OppToggle({ isOpp, onChange }) {
   return (
     <View style={{ flexDirection:'row', borderWidth:1, borderColor:C.border, marginBottom:14 }}>
       <TouchableOpacity onPress={()=>onChange(false)} activeOpacity={0.75} style={{ flex:1, paddingVertical:10, alignItems:'center', backgroundColor:!isOpp?C.gold:'transparent' }}>
-        <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:!isOpp?'#0F0F0D':C.muted }}>You</Txt>
+        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:!isOpp?'#0F0F0D':C.muted }}>You</Txt>
       </TouchableOpacity>
       <View style={{ width:1, backgroundColor:C.border }}/>
       <TouchableOpacity onPress={()=>onChange(true)} activeOpacity={0.75} style={{ flex:1, paddingVertical:10, alignItems:'center', backgroundColor:isOpp?C.opp:'transparent' }}>
-        <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:isOpp?C.offWhite:C.muted }}>Opponent</Txt>
+        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:isOpp?C.offWhite:C.muted }}>Opponent</Txt>
       </TouchableOpacity>
     </View>
   );
@@ -1097,7 +1114,7 @@ function PauseButton({ isPaused, onToggle, small=false }) {
     <TouchableOpacity onPress={onToggle} activeOpacity={0.75}
       style={{ borderWidth:1, borderColor:isPaused?C.amber:C.border, backgroundColor:isPaused?C.amberSoft:'transparent',
         paddingHorizontal:small?12:18, paddingVertical:small?6:8, flexDirection:'row', alignItems:'center' }}>
-      <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:isPaused?C.amber:C.muted }}>{isPaused?'▶ Resume':'⏸ Pause'}</Txt>
+      <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:isPaused?C.amber:C.muted }}>{isPaused?'▶ Resume':'⏸ Pause'}</Txt>
     </TouchableOpacity>
   );
 }
@@ -1145,9 +1162,9 @@ function PositionTimerPanel({ positions, durations, posCounts, onRecord, onAddPo
           return (
             <TouchableOpacity key={pos} onPress={()=>start(pos)} activeOpacity={0.75}
               style={{ backgroundColor:isOn?ac:'transparent', borderWidth:1, borderColor:isOn?ac:(pc||C.border), padding:12 }}>
-              <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold', letterSpacing:1.5, textTransform:'uppercase', color:isOn?'#0F0F0D':C.text }}>
+              <Txt style={{ fontSize:10, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:isOn?'#0F0F0D':C.text }}>
                 {isOn?'◼ ':'▶ '}{pos}
-                {pv>0&&!isOn&&<Txt style={{ fontSize:8, color:pc, fontFamily:'Outfit_700Bold' }}> +{pv}PTS</Txt>}
+                {pv>0&&!isOn&&<Txt style={{ fontSize:8, color:pc, fontFamily:F.semi }}> +{pv}PTS</Txt>}
               </Txt>
               <Txt style={{ fontSize:9, color:isOn?'#0F0F0D':C.muted, marginTop:3 }}>
                 {isOn ? `◉ ${fmtSecs(liveElapsed)}` : `${fmtSecs(durations[pos]||0)}${entries>0?` · ${entries}×`:''}`}
@@ -1310,7 +1327,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
         <TouchableOpacity onPress={()=>setScoreSheet('me')} activeOpacity={0.75}
           style={{ flex:1, backgroundColor:C.goldDim, borderWidth:1, borderColor:`${C.gold}33`, paddingVertical:12, alignItems:'center', opacity:isPaused?0.4:1 }}>
           <Cap style={{ color:C.gold, marginBottom:2 }}>You</Cap>
-          <Txt style={{ fontSize:28, fontFamily:'Outfit_900Black', color:C.gold, lineHeight:32 }}>{myPts}</Txt>
+          <Txt style={{ fontSize:28, fontFamily:F.display, color:C.gold, lineHeight:32 }}>{myPts}</Txt>
           <Cap style={{ color:C.gold, fontSize:7 }}>Score</Cap>
         </TouchableOpacity>
         <View style={{ alignItems:'center', justifyContent:'center', paddingHorizontal:8 }}>
@@ -1319,7 +1336,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
         <TouchableOpacity onPress={()=>setScoreSheet('opp')} activeOpacity={0.75}
           style={{ flex:1, backgroundColor:C.oppSoft, borderWidth:1, borderColor:`${C.opp}33`, paddingVertical:12, alignItems:'center', opacity:isPaused?0.4:1 }}>
           <Cap style={{ color:C.stone, marginBottom:2 }}>Opponent</Cap>
-          <Txt style={{ fontSize:28, fontFamily:'Outfit_900Black', color:C.stone, lineHeight:32 }}>{oppPts}</Txt>
+          <Txt style={{ fontSize:28, fontFamily:F.display, color:C.stone, lineHeight:32 }}>{oppPts}</Txt>
           <Cap style={{ color:C.stone, fontSize:7 }}>Score</Cap>
         </TouchableOpacity>
       </View>
@@ -1332,7 +1349,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
         {SUBTABS.map(t => (
           <TouchableOpacity key={t} onPress={()=>setSubTab(t)} activeOpacity={0.75}
             style={{ paddingHorizontal:14, paddingBottom:10, borderBottomWidth:2, borderBottomColor:subTab===t?C.gold:'transparent', marginRight:2 }}>
-            <Txt style={{ fontSize:9, fontFamily:subTab===t?'Outfit_700Bold':'Outfit_400Regular', color:subTab===t?C.gold:C.muted, letterSpacing:1.5, textTransform:'uppercase' }}>{t}</Txt>
+            <Txt style={{ fontSize:9, fontFamily:subTab===t?F.semi:F.body, color:subTab===t?C.gold:C.muted, letterSpacing:1.5, textTransform:'uppercase' }}>{t}</Txt>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -1433,7 +1450,7 @@ function StartRollModal({ visible, onStart, onCancel }) {
         <View style={{ flex:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:380, padding:24 }}>
             <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
-            <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold', marginBottom:20 }}>Start New Roll</Txt>
+            <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>Start New Roll</Txt>
             <FieldInput label="Partner Name (Optional)" value={partner} onChangeText={setPartner} placeholder="Training partner…"/>
             <View style={{ flexDirection:'row', gap:8, marginTop:8 }}>
               <Btn label="Start Roll" onPress={()=>{ onStart(partner.trim()); setPartner(''); }} style={{ flex:1 }}/>
@@ -1463,7 +1480,7 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
     <TouchableOpacity onPress={()=>{ setEndType(type); setSubName(''); setShowC(false); setCustomSub(''); }} activeOpacity={0.75}
       style={{ flex:1, borderWidth:2, borderColor:endType===type?C.gold:C.border, backgroundColor:endType===type?C.goldDim:'transparent', padding:14 }}>
       <Txt style={{ fontSize:20, marginBottom:6 }}>{icon}</Txt>
-      <Txt style={{ fontSize:10, fontFamily:'Outfit_800ExtraBold', letterSpacing:1.5, textTransform:'uppercase', color:endType===type?C.gold:C.textDim, marginBottom:4 }}>{label}</Txt>
+      <Txt style={{ fontSize:10, fontFamily:F.bold, letterSpacing:1.5, textTransform:'uppercase', color:endType===type?C.gold:C.textDim, marginBottom:4 }}>{label}</Txt>
       <Txt style={{ fontSize:9, color:C.muted, lineHeight:14 }}>{desc}</Txt>
     </TouchableOpacity>
   );
@@ -1474,7 +1491,7 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
         <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
             <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
-            <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold', marginBottom:20 }}>How did it end?</Txt>
+            <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>How did it end?</Txt>
             <View style={{ flexDirection:'row', gap:8, marginBottom:20 }}>
               <ETBtn type="time" icon="⏱" label="Time Expired" desc="Match ended on the clock"/>
               <ETBtn type="submission" icon="🔒" label="Submission" desc="Someone tapped out"/>
@@ -1484,7 +1501,7 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
               <>
                 {/* Submission result — overrides points regardless */}
                 <View style={{ borderWidth:1, borderColor:`${C.gold}44`, backgroundColor:C.goldDim, padding:10, marginBottom:14 }}>
-                  <Txt style={{ fontSize:9, color:C.gold, fontFamily:'Outfit_700Bold', letterSpacing:1.5, textTransform:'uppercase', marginBottom:2 }}>⚡ Submission overrides points</Txt>
+                  <Txt style={{ fontSize:9, color:C.gold, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', marginBottom:2 }}>⚡ Submission overrides points</Txt>
                   <Txt style={{ fontSize:11, color:C.textDim }}>Whoever gets the submission wins — regardless of score.</Txt>
                 </View>
                 <Cap style={{ marginBottom:8 }}>Who got the submission?</Cap>
@@ -1492,8 +1509,8 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
                   {[['me','I submitted them','WIN'],['opp','I was submitted','LOSS']].map(([val,lbl,outcome]) => (
                     <TouchableOpacity key={val} onPress={()=>setWinner(val)} activeOpacity={0.75}
                       style={{ flex:1, paddingVertical:12, borderWidth:2, borderColor:winner===val?(val==='me'?C.sage:C.red):C.border, alignItems:'center', backgroundColor:winner===val?(val==='me'?`${C.sage}18`:`${C.red}18`):'transparent' }}>
-                      <Txt style={{ fontSize:11, fontFamily:'Outfit_900Black', color:winner===val?(val==='me'?C.sage:C.red):C.muted, marginBottom:3 }}>{outcome}</Txt>
-                      <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1, textTransform:'uppercase', color:winner===val?(val==='me'?C.sage:C.red):C.muted }}>{lbl}</Txt>
+                      <Txt style={{ fontSize:11, fontFamily:F.display, color:winner===val?(val==='me'?C.sage:C.red):C.muted, marginBottom:3 }}>{outcome}</Txt>
+                      <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1, textTransform:'uppercase', color:winner===val?(val==='me'?C.sage:C.red):C.muted }}>{lbl}</Txt>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -1529,7 +1546,7 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
                               style={{ borderWidth:1, borderColor:`${C.red}55`, backgroundColor:`${C.red}12`,
                                 paddingHorizontal:10, paddingVertical:7, flexDirection:'row', alignItems:'center', gap:4 }}>
                               <Txt style={{ fontSize:9, color:C.red }}>↑</Txt>
-                              <Txt style={{ fontSize:11, color:C.red, fontFamily:'Outfit_600SemiBold' }}>{s}</Txt>
+                              <Txt style={{ fontSize:11, color:C.red, fontFamily:F.medium }}>{s}</Txt>
                             </TouchableOpacity>
                           ))}
                         </View>
@@ -1545,7 +1562,7 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
             <View style={{ flexDirection:'row', gap:8, marginTop:8 }}>
               <TouchableOpacity onPress={()=>{ if(!canSave)return; onEnd({ endType, submissionName:endType==='submission'?resolvedSub:'', submissionWinner:endType==='submission'?winner:null, duration:duration.trim(), notes:notes.trim() }); reset(); }} activeOpacity={0.75}
                 style={{ flex:1, minHeight:48, alignItems:'center', justifyContent:'center', backgroundColor:canSave?C.sage:C.faint, opacity:canSave?1:0.5 }}>
-                <Txt style={{ fontSize:9, fontFamily:'Outfit_800ExtraBold', letterSpacing:2.5, textTransform:'uppercase', color:canSave?C.offWhite:C.muted }}>Save Roll</Txt>
+                <Txt style={{ fontSize:9, fontFamily:F.bold, letterSpacing:2.5, textTransform:'uppercase', color:canSave?C.offWhite:C.muted }}>Save Roll</Txt>
               </TouchableOpacity>
               <Btn label="Cancel" onPress={()=>{ onCancel(); reset(); }} outline style={{ paddingHorizontal:20 }}/>
             </View>
@@ -1567,38 +1584,44 @@ function RollCard({ roll, index, onView, onDelete, confirm }) {
   const dateStr = roll.startedAt ? new Date(roll.startedAt).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'}) : '';
   const timeStr = roll.startedAt ? new Date(roll.startedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
   return (
-    <View style={{ flexDirection:'row', borderWidth:1, borderColor:C.border, marginBottom:8 }}>
-      <View style={{ width:3, backgroundColor:rc }}/>
+    <View style={{ flexDirection:'row', borderWidth:1, borderColor:C.border, marginBottom:10, borderRadius:8, overflow:'hidden' }}>
+      <View style={{ width:4, backgroundColor:rc }}/>
       <TouchableOpacity onPress={()=>onView(roll)} activeOpacity={0.75} style={{ flex:1, padding:14 }}>
         <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start' }}>
           <View style={{ flex:1 }}>
-            <Txt style={{ fontSize:14, fontFamily:'Outfit_700Bold' }}>
-              Roll {String(index).padStart(2,'0')}{roll.partner?<Txt style={{ color:C.muted, fontFamily:'Outfit_400Regular' }}> · {roll.partner}</Txt>:''}
+            <Txt style={{ fontSize:15, fontFamily:F.semi }}>
+              Roll {String(index).padStart(2,'0')}{roll.partner?<Txt style={{ color:C.textDim, fontFamily:F.body }}> · {roll.partner}</Txt>:''}
             </Txt>
-            <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginTop:3 }}>
-              <Txt style={{ fontSize:10, color:C.gold, fontFamily:'Outfit_600SemiBold' }}>{dateStr}</Txt>
-              {timeStr ? <Txt style={{ fontSize:9, color:C.muted }}>@ {timeStr}</Txt> : null}
+            <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginTop:4 }}>
+              <Txt style={{ fontSize:12, color:C.gold, fontFamily:F.medium }}>{dateStr}</Txt>
+              {timeStr ? <Txt style={{ fontSize:11, color:C.muted }}>@ {timeStr}</Txt> : null}
             </View>
           </View>
-          <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginLeft:8 }}>
-            <View style={{ alignItems:'center' }}><Txt style={{ fontSize:20, fontFamily:'Outfit_900Black', color:C.gold, lineHeight:24 }}>{myPts}</Txt><Cap style={{ fontSize:7 }}>You</Cap></View>
-            <Txt style={{ color:C.border }}>·</Txt>
-            <View style={{ alignItems:'center' }}><Txt style={{ fontSize:20, fontFamily:'Outfit_900Black', color:C.stone, lineHeight:24 }}>{oppPts}</Txt><Cap style={{ fontSize:7 }}>Opp</Cap></View>
+          <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginLeft:10 }}>
+            <View style={{ alignItems:'center' }}>
+              <Text style={{ fontSize:28, fontFamily:F.display, color:C.gold, lineHeight:32 }}>{myPts}</Text>
+              <Cap style={{ fontSize:8 }}>You</Cap>
+            </View>
+            <Txt style={{ color:C.border, fontSize:16, lineHeight:32 }}>–</Txt>
+            <View style={{ alignItems:'center' }}>
+              <Text style={{ fontSize:28, fontFamily:F.display, color:C.stone, lineHeight:32 }}>{oppPts}</Text>
+              <Cap style={{ fontSize:8 }}>Opp</Cap>
+            </View>
           </View>
         </View>
         <View style={{ flexDirection:'row', marginTop:10, alignItems:'center' }}>
-          {totalPos>0 && <Txt style={{ fontSize:11, color:C.textDim, marginRight:14 }}>{fmtSecs(totalPos)} <Cap style={{ fontSize:8 }}>mat</Cap></Txt>}
-          {isSub && <View style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:6, paddingVertical:2, marginRight:6 }}>
-            <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', color:C.red, letterSpacing:1 }}>🔒 {roll.submissionName||'SUB'}</Txt>
+          {totalPos>0 && <Txt style={{ fontSize:12, color:C.textDim, marginRight:14 }}>{fmtSecs(totalPos)} <Cap style={{ fontSize:8 }}>mat</Cap></Txt>}
+          {isSub && <View style={{ borderWidth:1, borderColor:`${C.red}55`, paddingHorizontal:7, paddingVertical:3, marginRight:6, borderRadius:4 }}>
+            <Txt style={{ fontSize:10, fontFamily:F.semi, color:C.red }}>🔒 {roll.submissionName||'SUB'}</Txt>
           </View>}
-          <View style={{ marginLeft:'auto', borderWidth:1, borderColor:`${rc}44`, paddingHorizontal:8, paddingVertical:3 }}>
-            <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', color:rc, letterSpacing:2 }}>{res==='W'?'WIN':res==='L'?'LOSS':'DRAW'}</Txt>
+          <View style={{ marginLeft:'auto', borderWidth:1, borderColor:`${rc}55`, paddingHorizontal:10, paddingVertical:4, borderRadius:4 }}>
+            <Txt style={{ fontSize:10, fontFamily:F.semi, color:rc }}>{res==='W'?'WIN':res==='L'?'LOSS':'DRAW'}</Txt>
           </View>
         </View>
       </TouchableOpacity>
       <TouchableOpacity onPress={async()=>{ const ok = await confirm('Delete this roll?'); if(ok) onDelete(roll.id); }} activeOpacity={0.75}
         style={{ borderLeftWidth:1, borderLeftColor:C.border, paddingHorizontal:14, alignItems:'center', justifyContent:'center' }}>
-        <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
+        <Txt style={{ color:C.muted, fontSize:20 }}>✕</Txt>
       </TouchableOpacity>
     </View>
   );
@@ -1619,7 +1642,7 @@ function CompetitionsList({ comps, onSelect, onNew }) {
       <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
         <Cap>{comps.length} competition{comps.length!==1?'s':''}</Cap>
         <TouchableOpacity onPress={onNew} activeOpacity={0.75} style={{ borderWidth:1, borderColor:C.gold, paddingHorizontal:14, paddingVertical:7 }}>
-          <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', color:C.gold, letterSpacing:2, textTransform:'uppercase' }}>+ New</Txt>
+          <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.gold, letterSpacing:2, textTransform:'uppercase' }}>+ New</Txt>
         </TouchableOpacity>
       </View>
       {comps.map(comp => {
@@ -1637,11 +1660,11 @@ function CompetitionsList({ comps, onSelect, onNew }) {
               <View style={{ flex:1 }}>
                 <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:2 }}>
                   {medalEmoji && <Txt style={{ fontSize:20 }}>{medalEmoji}</Txt>}
-                  <Txt style={{ fontSize:14, fontFamily:'Outfit_800ExtraBold', flex:1 }}>{comp.name}</Txt>
+                  <Txt style={{ fontSize:14, fontFamily:F.bold, flex:1 }}>{comp.name}</Txt>
                 </View>
                 {/* Date + location */}
                 {(comp.date||comp.location) && (
-                  <Txt style={{ fontSize:10, color:C.gold, fontFamily:'Outfit_600SemiBold', marginBottom:2 }}>
+                  <Txt style={{ fontSize:10, color:C.gold, fontFamily:F.medium, marginBottom:2 }}>
                     {comp.date}{comp.location?` · ${comp.location}`:''}
                   </Txt>
                 )}
@@ -1652,14 +1675,14 @@ function CompetitionsList({ comps, onSelect, onNew }) {
                 <View style={{ flexDirection:'row', gap:14 }}>
                   {[['W',wins,C.sage],['L',losses,C.red],['D',draws,C.amber],['Rounds',comp.rounds.length,C.muted]].map(([lbl,val,clr])=>(
                     <View key={lbl} style={{ alignItems:'center' }}>
-                      <Txt style={{ fontSize:16, fontFamily:'Outfit_900Black', color:val>0?clr:C.border }}>{val}</Txt>
+                      <Txt style={{ fontSize:16, fontFamily:F.display, color:val>0?clr:C.border }}>{val}</Txt>
                       <Cap style={{ fontSize:7 }}>{lbl}</Cap>
                     </View>
                   ))}
                 </View>
               </View>
               {ov && <View style={{ borderWidth:1, borderColor:`${oc}44`, paddingHorizontal:12, paddingVertical:6, alignItems:'center', marginLeft:12 }}>
-                <Txt style={{ fontSize:18, fontFamily:'Outfit_900Black', color:oc }}>{ov}</Txt>
+                <Txt style={{ fontSize:18, fontFamily:F.display, color:oc }}>{ov}</Txt>
                 <Cap style={{ fontSize:7 }}>Overall</Cap>
               </View>}
             </View>
@@ -1681,7 +1704,7 @@ function ProfileScreen({ profiles, activeProfileId, onSelect, onNew, onEdit, onD
         <View style={{ flexDirection:'row', alignItems:'center', gap:14 }}>
           <GSLLogo size={44}/>
           <View>
-            <Txt style={{ fontSize:11, fontFamily:'Outfit_900Black', letterSpacing:3, textTransform:'uppercase', color:C.text, lineHeight:15 }}>Grounded Skills Lab</Txt>
+            <Txt style={{ fontSize:11, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.text, lineHeight:15 }}>Grounded Skills Lab</Txt>
             <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginTop:4 }}>
               <View style={{ width:16, height:1, backgroundColor:C.gold }}/>
               <Cap style={{ fontSize:7, color:C.gold, letterSpacing:2 }}>Select Profile</Cap>
@@ -1692,7 +1715,7 @@ function ProfileScreen({ profiles, activeProfileId, onSelect, onNew, onEdit, onD
 
       <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:20 }}>
         <Txt style={{ fontSize:9, color:C.muted, letterSpacing:3, textTransform:'uppercase', marginBottom:4 }}>Who's training today?</Txt>
-        <Txt style={{ fontSize:22, fontFamily:'Outfit_900Black', marginBottom:24 }}>Choose your profile.</Txt>
+        <Txt style={{ fontSize:22, fontFamily:F.display, marginBottom:24 }}>Choose your profile.</Txt>
 
         {profiles.map(p => {
           const isActive = p.id === activeProfileId;
@@ -1702,8 +1725,8 @@ function ProfileScreen({ profiles, activeProfileId, onSelect, onNew, onEdit, onD
               <ProfileAvatar name={p.name} size={44} belt={p.belt||'white'}/>
               <View style={{ flex:1, marginLeft:14 }}>
                 <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:5 }}>
-                  <Txt style={{ fontSize:14, fontFamily:'Outfit_800ExtraBold', color:isActive?C.gold:C.text }}>{p.name}</Txt>
-                  {isActive && <View style={{ borderWidth:1, borderColor:`${C.gold}44`, paddingHorizontal:5, paddingVertical:1 }}><Txt style={{ fontSize:7, color:C.gold, letterSpacing:2, textTransform:'uppercase', fontFamily:'Outfit_700Bold' }}>Active</Txt></View>}
+                  <Txt style={{ fontSize:14, fontFamily:F.bold, color:isActive?C.gold:C.text }}>{p.name}</Txt>
+                  {isActive && <View style={{ borderWidth:1, borderColor:`${C.gold}44`, paddingHorizontal:5, paddingVertical:1 }}><Txt style={{ fontSize:7, color:C.gold, letterSpacing:2, textTransform:'uppercase', fontFamily:F.semi }}>Active</Txt></View>}
                 </View>
                 <BeltBadge belt={p.belt||'white'} stripes={p.stripes||0} size="sm"/>
                 {p.gym && <Txt style={{ fontSize:9, color:C.muted, marginTop:4 }}>{p.gym}</Txt>}
@@ -1711,7 +1734,7 @@ function ProfileScreen({ profiles, activeProfileId, onSelect, onNew, onEdit, onD
               <View style={{ flexDirection:'row', gap:6 }}>
                 <TouchableOpacity onPress={e=>{ e.stopPropagation?.(); setEditingProfile(p); }} activeOpacity={0.75}
                   style={{ borderWidth:1, borderColor:C.border, paddingHorizontal:10, paddingVertical:6 }}>
-                  <Txt style={{ fontSize:8, color:C.muted, letterSpacing:1.5, textTransform:'uppercase', fontFamily:'Outfit_700Bold' }}>Edit</Txt>
+                  <Txt style={{ fontSize:8, color:C.muted, letterSpacing:1.5, textTransform:'uppercase', fontFamily:F.semi }}>Edit</Txt>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={async()=>{ const ok=await confirm(`Delete "${p.name}" and ALL their data?`); if(ok) onDelete(p.id); }} activeOpacity={0.75}
                   style={{ borderWidth:1, borderColor:C.border, paddingHorizontal:10, paddingVertical:6 }}>
@@ -1757,7 +1780,7 @@ function ProfileEditModal({ initial, onSave, onCancel }) {
             <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
               <View>
                 <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
-                <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold' }}>{initial?'Edit Profile':'New Profile'}</Txt>
+                <Txt style={{ fontSize:16, fontFamily:F.bold }}>{initial?'Edit Profile':'New Profile'}</Txt>
               </View>
               <TouchableOpacity onPress={onCancel} activeOpacity={0.75} style={{ width:32, height:32, borderWidth:1, borderColor:C.border, alignItems:'center', justifyContent:'center' }}>
                 <Txt style={{ color:C.muted }}>✕</Txt>
@@ -1768,7 +1791,7 @@ function ProfileEditModal({ initial, onSave, onCancel }) {
             <View style={{ flexDirection:'row', alignItems:'center', gap:14, padding:14, borderWidth:1, borderColor:C.border, backgroundColor:C.faint, marginBottom:20 }}>
               <ProfileAvatar name={name||'?'} size={44} belt={belt}/>
               <View>
-                <Txt style={{ fontSize:14, fontFamily:'Outfit_800ExtraBold', marginBottom:5 }}>{name||'Athlete Name'}</Txt>
+                <Txt style={{ fontSize:14, fontFamily:F.bold, marginBottom:5 }}>{name||'Athlete Name'}</Txt>
                 <BeltBadge belt={belt} stripes={stripes} size="sm"/>
                 {gym ? <Txt style={{ fontSize:9, color:C.muted, marginTop:4 }}>{gym}</Txt> : null}
               </View>
@@ -1785,7 +1808,7 @@ function ProfileEditModal({ initial, onSave, onCancel }) {
                       style={{ paddingVertical:7, paddingHorizontal:10, borderWidth:2,
                         borderColor:belt===b?C.gold:C.border,
                         backgroundColor:belt===b?bc.bg:C.faint }}>
-                      <Txt style={{ fontSize:8, fontFamily:'Outfit_800ExtraBold', letterSpacing:1,
+                      <Txt style={{ fontSize:8, fontFamily:F.bold, letterSpacing:1,
                         textTransform:'uppercase', color:belt===b?bc.text:C.muted }}>{bc.label}</Txt>
                     </TouchableOpacity>
                   ); })}
@@ -1798,7 +1821,7 @@ function ProfileEditModal({ initial, onSave, onCancel }) {
                     style={{ paddingVertical:8, paddingHorizontal:12, borderWidth:2,
                       borderColor:belt===b?C.gold:C.border,
                       backgroundColor:belt===b?bc.bg:C.faint }}>
-                    <Txt style={{ fontSize:8, fontFamily:'Outfit_800ExtraBold', letterSpacing:1.5,
+                    <Txt style={{ fontSize:8, fontFamily:F.bold, letterSpacing:1.5,
                       textTransform:'uppercase', color:belt===b?bc.text:C.muted }}>{bc.label}</Txt>
                   </TouchableOpacity>
                 ); })}
@@ -1809,7 +1832,7 @@ function ProfileEditModal({ initial, onSave, onCancel }) {
               <View style={{ flexDirection:'row', gap:6 }}>
                 {[0,1,2,3,4].map(n => (
                   <TouchableOpacity key={n} onPress={()=>setStripes(n)} activeOpacity={0.75} style={{ flex:1, minHeight:40, borderWidth:1, borderColor:stripes===n?C.gold:C.border, backgroundColor:stripes===n?C.goldDim:'transparent', alignItems:'center', justifyContent:'center' }}>
-                    <Txt style={{ fontSize:13, fontFamily:'Outfit_700Bold', color:stripes===n?C.gold:C.muted }}>{n}</Txt>
+                    <Txt style={{ fontSize:13, fontFamily:F.semi, color:stripes===n?C.gold:C.muted }}>{n}</Txt>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1871,7 +1894,7 @@ function CompModal({ visible, initial, onSave, onCancel }) {
         <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
             <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
-            <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold', marginBottom:20 }}>{initial?'Edit Competition':'New Competition'}</Txt>
+            <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>{initial?'Edit Competition':'New Competition'}</Txt>
 
             <FieldInput label="Competition Name *" value={name} onChangeText={setName} placeholder="e.g. IBJJF Pan Championship"/>
             <FieldInput label="Location" value={location} onChangeText={setLocation} placeholder="City, State"/>
@@ -1885,7 +1908,7 @@ function CompModal({ visible, initial, onSave, onCancel }) {
                   <TouchableOpacity key={g} onPress={()=>setGi(g)} activeOpacity={0.75}
                     style={{ flex:1, borderWidth:1, borderColor:gi===g?C.gold:C.border,
                       backgroundColor:gi===g?C.goldDim:'transparent', paddingVertical:10, alignItems:'center' }}>
-                    <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:gi===g?C.gold:C.muted }}>{g}</Txt>
+                    <Txt style={{ fontSize:11, fontFamily:F.semi, color:gi===g?C.gold:C.muted }}>{g}</Txt>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1900,7 +1923,7 @@ function CompModal({ visible, initial, onSave, onCancel }) {
                     <TouchableOpacity key={w} onPress={()=>setWeight(w)} activeOpacity={0.75}
                       style={{ borderWidth:1, borderColor:weight===w?C.gold:C.border,
                         backgroundColor:weight===w?C.goldDim:'transparent', paddingVertical:7, paddingHorizontal:10 }}>
-                      <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold', color:weight===w?C.gold:C.muted }}>{w}</Txt>
+                      <Txt style={{ fontSize:10, fontFamily:F.semi, color:weight===w?C.gold:C.muted }}>{w}</Txt>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -1916,7 +1939,7 @@ function CompModal({ visible, initial, onSave, onCancel }) {
                 placeholder="e.g. 8" placeholderTextColor={C.muted}
                 keyboardType="number-pad" returnKeyType="done"
                 style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:14,
-                  fontFamily:'Outfit_400Regular', padding:12 }}/>
+                  fontFamily:F.body, padding:12 }}/>
             </View>
 
             {/* Medal */}
@@ -1929,7 +1952,7 @@ function CompModal({ visible, initial, onSave, onCancel }) {
                       backgroundColor:medal===m.key?`${m.color}18`:'transparent',
                       paddingVertical:10, alignItems:'center' }}>
                     <Txt style={{ fontSize:16, marginBottom:2 }}>{m.icon}</Txt>
-                    <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold',
+                    <Txt style={{ fontSize:8, fontFamily:F.semi,
                       color:medal===m.key?m.color:C.muted }}>{m.label}</Txt>
                   </TouchableOpacity>
                 ))}
@@ -2458,7 +2481,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
         style={{ paddingHorizontal:8, paddingVertical:5, borderWidth:1,
           borderColor: active ? cfg.color : C.border,
           backgroundColor: active ? cfg.bg : 'transparent' }}>
-        <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', letterSpacing:1,
+        <Txt style={{ fontSize:8, fontFamily:F.semi, letterSpacing:1,
           textTransform:'uppercase', color: active ? cfg.color : C.muted }}>{cfg.label}</Txt>
       </TouchableOpacity>
     );
@@ -2477,7 +2500,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
         ].map(({label,value,color})=>(
           <View key={label} style={{ flex:1, borderWidth:1, borderColor:C.border,
             backgroundColor:C.card, padding:10, alignItems:'center' }}>
-            <Txt style={{ fontSize:18, fontFamily:'Outfit_900Black', color, lineHeight:22 }}>{value}</Txt>
+            <Txt style={{ fontSize:18, fontFamily:F.display, color, lineHeight:22 }}>{value}</Txt>
             <Cap style={{ fontSize:6, textAlign:'center', marginTop:3 }}>{label}</Cap>
           </View>
         ))}
@@ -2488,7 +2511,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
         <View style={{ flexDirection:'row', alignItems:'center', padding:14,
           borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
           <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
-          <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2,
+          <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2,
             textTransform:'uppercase', color:C.textDim, flex:1 }}>
             {editingEntry ? 'Edit entry' : 'Log techniques'}
           </Txt>
@@ -2507,7 +2530,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
               <TextInput value={date} onChangeText={setDate}
                 placeholder="YYYY-MM-DD" placeholderTextColor={C.muted}
                 style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                  fontFamily:'Outfit_400Regular', padding:10 }}/>
+                  fontFamily:F.body, padding:10 }}/>
             </View>
           </View>
 
@@ -2520,7 +2543,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                     borderWidth:1, borderColor:sessionType===st.key?C.gold:C.border,
                     backgroundColor:sessionType===st.key?C.goldDim:'transparent' }}>
                   <Txt style={{ fontSize:13 }}>{st.icon}</Txt>
-                  <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold',
+                  <Txt style={{ fontSize:11, fontFamily:F.semi,
                     color:sessionType===st.key?C.gold:C.muted }}>{st.label}</Txt>
                 </TouchableOpacity>
               ))}
@@ -2551,7 +2574,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                     placeholderTextColor={C.muted}
                     returnKeyType="next"
                     style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                      fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.card }}/>
+                      fontFamily:F.body, padding:10, backgroundColor:C.card }}/>
                   {/* Predictive suggestions */}
                   {tech.name.trim().length > 0 && (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}
@@ -2595,7 +2618,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                 placeholder="Note (optional)…"
                 placeholderTextColor={C.muted}
                 style={{ borderWidth:1, borderColor:C.border, color:C.text, fontSize:11,
-                  fontFamily:'Outfit_400Regular', padding:8, backgroundColor:C.card }}/>
+                  fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
             </View>
           ))}
 
@@ -2616,7 +2639,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
             placeholderTextColor={C.muted}
             multiline numberOfLines={3}
             style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-              fontFamily:'Outfit_400Regular', padding:12, minHeight:70, marginBottom:14,
+              fontFamily:F.body, padding:12, minHeight:70, marginBottom:14,
               textAlignVertical:'top' }}/>
 
           <TouchableOpacity onPress={saveEntry} disabled={saving||!techniques.some(t=>t.name.trim())}
@@ -2625,7 +2648,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
               padding:14, alignItems:'center' }}>
             {saving
               ? <ActivityIndicator color="#0F0F0D"/>
-              : <Txt style={{ fontSize:10, fontFamily:'Outfit_900Black', letterSpacing:2,
+              : <Txt style={{ fontSize:10, fontFamily:F.display, letterSpacing:2,
                   textTransform:'uppercase', color:'#0F0F0D' }}>
                   {editingEntry ? 'Save changes' : 'Save session'}
                 </Txt>}
@@ -2639,7 +2662,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
           <View style={{ flexDirection:'row', alignItems:'center', padding:14,
             borderBottomWidth:1, borderBottomColor:`${C.gold}33` }}>
             <Txt style={{ fontSize:14, marginRight:8 }}>💡</Txt>
-            <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2,
+            <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2,
               textTransform:'uppercase', color:C.gold }}>Journal insights</Txt>
           </View>
 
@@ -2657,7 +2680,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                     <View style={{ width:60, height:5, backgroundColor:`${C.gold}22`, marginHorizontal:10 }}>
                       <View style={{ height:5, width:`${rate}%`, backgroundColor:rc }}/>
                     </View>
-                    <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold', color:rc, width:36, textAlign:'right' }}>{rate}%</Txt>
+                    <Txt style={{ fontSize:10, fontFamily:F.semi, color:rc, width:36, textAlign:'right' }}>{rate}%</Txt>
                   </View>
                 );
               })}
@@ -2687,7 +2710,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
               style={{ flex:1, paddingVertical:10, borderWidth:1, alignItems:'center',
                 borderColor:viewMode===key?C.gold:C.border,
                 backgroundColor:viewMode===key?C.goldDim:'transparent' }}>
-              <Txt style={{ fontSize:11, fontFamily:viewMode===key?'Outfit_700Bold':'Outfit_400Regular',
+              <Txt style={{ fontSize:11, fontFamily:viewMode===key?F.semi:F.body,
                 color:viewMode===key?C.gold:C.muted }}>{label}</Txt>
             </TouchableOpacity>
           ))}
@@ -2699,7 +2722,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
         <View>
           <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
             <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
-            <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2,
+            <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2,
               textTransform:'uppercase', color:C.textDim }}>Past entries</Txt>
           </View>
           {journal.map(entry => {
@@ -2710,7 +2733,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                 <View style={{ flexDirection:'row', alignItems:'center', padding:12,
                   borderBottomWidth:1, borderBottomColor:C.faint, backgroundColor:C.faint }}>
                   <Txt style={{ fontSize:13, marginRight:6 }}>{st.icon}</Txt>
-                  <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:C.text, flex:1 }}>
+                  <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.text, flex:1 }}>
                     {st.label} · {entry.date}
                   </Txt>
                   <TouchableOpacity onPress={()=>loadForEdit(entry)} activeOpacity={0.75}
@@ -2733,7 +2756,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                           <Txt style={{ fontSize:10, color:o.color }}>
                             {o.label==='Learned'?'📖':o.label==='Tried'?'⚡':'✅'}
                           </Txt>
-                          <Txt style={{ fontSize:11, color:o.color, fontFamily:'Outfit_600SemiBold' }}>{t.name}</Txt>
+                          <Txt style={{ fontSize:11, color:o.color, fontFamily:F.medium }}>{t.name}</Txt>
                         </View>
                       );
                     })}
@@ -2776,7 +2799,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
           <View>
             <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
               <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2,
+              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2,
                 textTransform:'uppercase', color:C.textDim }}>
                 {sorted.length} technique{sorted.length!==1?'s':''} logged
               </Txt>
@@ -2787,7 +2810,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
               value={techSearch} onChangeText={setTechSearch}
               placeholder="Search techniques…" placeholderTextColor={C.muted}
               style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                fontFamily:'Outfit_400Regular', padding:10, marginBottom:12, backgroundColor:C.faint }}/>
+                fontFamily:F.body, padding:10, marginBottom:12, backgroundColor:C.faint }}/>
 
             {sorted
               .filter(([name])=>!techSearch.trim()||name.toLowerCase().includes(techSearch.toLowerCase()))
@@ -2808,7 +2831,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                     <View style={{ padding:14, borderBottomWidth:1, borderBottomColor:C.faint,
                       backgroundColor:C.faint, flexDirection:'row', alignItems:'center' }}>
                       <View style={{ flex:1 }}>
-                        <Txt style={{ fontSize:13, fontFamily:'Outfit_800ExtraBold', color:C.text }}>{name}</Txt>
+                        <Txt style={{ fontSize:13, fontFamily:F.bold, color:C.text }}>{name}</Txt>
                         <Cap style={{ marginTop:2 }}>
                           {appearances.length} appearance{appearances.length!==1?'s':''} · first logged {appearances[appearances.length-1].date}
                         </Cap>
@@ -2816,7 +2839,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                       {finishRate !== null && (
                         <View style={{ borderWidth:1, borderColor:`${rc}44`, backgroundColor:`${rc}15`,
                           paddingHorizontal:10, paddingVertical:6, alignItems:'center' }}>
-                          <Txt style={{ fontSize:14, fontFamily:'Outfit_900Black', color:rc }}>{finishRate}%</Txt>
+                          <Txt style={{ fontSize:14, fontFamily:F.display, color:rc }}>{finishRate}%</Txt>
                           <Cap style={{ fontSize:6, color:rc }}>finish rate</Cap>
                         </View>
                       )}
@@ -2833,7 +2856,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                         <View key={label} style={{ flex:1, borderWidth:1, borderColor:`${color}33`,
                           backgroundColor:bg, padding:8, alignItems:'center' }}>
                           <Txt style={{ fontSize:9 }}>{icon}</Txt>
-                          <Txt style={{ fontSize:16, fontFamily:'Outfit_900Black', color, lineHeight:22 }}>{value}</Txt>
+                          <Txt style={{ fontSize:16, fontFamily:F.display, color, lineHeight:22 }}>{value}</Txt>
                           <Cap style={{ fontSize:7, color }}>{label}</Cap>
                         </View>
                       ))}
@@ -3013,7 +3036,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
             <View key={i} style={{flexDirection:'row',alignItems:'center',gap:5}}>
               <View style={{width:8,height:8,backgroundColor:sl.color}}/>
               <Txt style={{fontSize:10,color:C.textDim}}>{sl.label}</Txt>
-              <Txt style={{fontSize:10,color:sl.color,fontFamily:'Outfit_700Bold'}}>{sl.value} ({sl.pct}%)</Txt>
+              <Txt style={{fontSize:10,color:sl.color,fontFamily:F.semi}}>{sl.value} ({sl.pct}%)</Txt>
             </View>
           ))}
         </View>
@@ -3026,7 +3049,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
     <View style={{borderWidth:1,borderColor:C.border,marginBottom:12}}>
       <View style={{flexDirection:'row',alignItems:'center',padding:14,borderBottomWidth:1,borderBottomColor:C.border,backgroundColor:C.faint}}>
         <View style={{width:3,height:14,backgroundColor:accent,marginRight:10}}/>
-        <Txt style={{fontSize:9,fontFamily:'Outfit_700Bold',letterSpacing:2,textTransform:'uppercase',color:C.textDim}}>{title}</Txt>
+        <Txt style={{fontSize:9,fontFamily:F.semi,letterSpacing:2,textTransform:'uppercase',color:C.textDim}}>{title}</Txt>
       </View>
       <View style={{padding:14}}>{children}</View>
     </View>
@@ -3049,10 +3072,10 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
         <View style={{flexDirection:'row',justifyContent:'space-between',marginBottom:4}}>
           <Txt style={{fontSize:10,color:C.muted,flex:1}} numberOfLines={1}>Roll {rolls.length-i}{r.partner?` · ${r.partner}`:''}</Txt>
           <View style={{flexDirection:'row',gap:8,flexShrink:0}}>
-            <Txt style={{fontSize:10,fontFamily:'Outfit_700Bold',color:C.gold}}>{my}<Cap style={{fontSize:7}}> you</Cap></Txt>
-            <Txt style={{fontSize:10,fontFamily:'Outfit_700Bold',color:C.stone}}>{op}<Cap style={{fontSize:7}}> opp</Cap></Txt>
+            <Txt style={{fontSize:10,fontFamily:F.semi,color:C.gold}}>{my}<Cap style={{fontSize:7}}> you</Cap></Txt>
+            <Txt style={{fontSize:10,fontFamily:F.semi,color:C.stone}}>{op}<Cap style={{fontSize:7}}> opp</Cap></Txt>
             <View style={{borderWidth:1,borderColor:win?`${C.sage}44`:loss?`${C.red}44`:`${C.amber}44`,paddingHorizontal:5,paddingVertical:1}}>
-              <Txt style={{fontSize:8,fontFamily:'Outfit_700Bold',color:win?C.sage:loss?C.red:C.amber}}>{win?'W':loss?'L':'D'}</Txt>
+              <Txt style={{fontSize:8,fontFamily:F.semi,color:win?C.sage:loss?C.red:C.amber}}>{win?'W':loss?'L':'D'}</Txt>
             </View>
           </View>
         </View>
@@ -3149,7 +3172,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
           {CHART_TABS.map(t=>(
             <TouchableOpacity key={t.key} onPress={()=>setChartTab(t.key)} activeOpacity={0.75}
               style={{paddingVertical:12,paddingHorizontal:16,alignItems:'center',borderBottomWidth:2,borderBottomColor:chartTab===t.key?C.gold:'transparent'}}>
-              <Txt style={{fontSize:9,fontFamily:chartTab===t.key?'Outfit_700Bold':'Outfit_400Regular',letterSpacing:1.5,textTransform:'uppercase',color:chartTab===t.key?C.gold:C.muted}}>{t.label}</Txt>
+              <Txt style={{fontSize:9,fontFamily:chartTab===t.key?F.semi:F.body,letterSpacing:1.5,textTransform:'uppercase',color:chartTab===t.key?C.gold:C.muted}}>{t.label}</Txt>
             </TouchableOpacity>
           ))}
         </View>
@@ -3165,7 +3188,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
             <View style={{flexDirection:'row',alignItems:'center',gap:10,marginBottom:8}}>
               <Txt style={{fontSize:20}}>💡</Txt>
               <View style={{flex:1}}>
-                <Txt style={{fontSize:14,fontFamily:'Outfit_800ExtraBold',color:C.gold}}>Performance Insights</Txt>
+                <Txt style={{fontSize:14,fontFamily:F.bold,color:C.gold}}>Performance Insights</Txt>
                 <Cap style={{fontSize:8,color:C.muted,marginTop:2}}>Training + competition patterns</Cap>
               </View>
             </View>
@@ -3188,7 +3211,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
               {label:'Streak',      value:`${streak}d`,                                                               color:C.amber},
             ].map(({label,value,color})=>(
               <View key={label} style={{flex:1,minWidth:56,borderWidth:1,borderColor:C.border,backgroundColor:C.card,padding:10,alignItems:'center'}}>
-                <Txt style={{fontSize:18,fontFamily:'Outfit_900Black',color,lineHeight:22}}>{value}</Txt>
+                <Txt style={{fontSize:18,fontFamily:F.display,color,lineHeight:22}}>{value}</Txt>
                 <Cap style={{fontSize:6,textAlign:'center',marginTop:3}}>{label}</Cap>
               </View>
             ))}
@@ -3201,14 +3224,14 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
                 <View style={{width:32,height:32,backgroundColor:`${ins.color}20`,borderWidth:1,borderColor:`${ins.color}44`,alignItems:'center',justifyContent:'center',marginRight:10}}>
                   <Txt style={{fontSize:16}}>{ins.icon}</Txt>
                 </View>
-                <Txt style={{fontSize:11,fontFamily:'Outfit_800ExtraBold',color:ins.color,flex:1}}>{ins.title}</Txt>
+                <Txt style={{fontSize:11,fontFamily:F.bold,color:ins.color,flex:1}}>{ins.title}</Txt>
                 <View style={{borderWidth:1,borderColor:`${ins.color}44`,paddingHorizontal:6,paddingVertical:2}}>
                   <Cap style={{fontSize:7,color:ins.color}}>{ins.category}</Cap>
                 </View>
               </View>
               <View style={{padding:14}}>
                 <Txt style={{fontSize:13,color:C.text,lineHeight:20,marginBottom:6}}>{ins.text}</Txt>
-                <Txt style={{fontSize:10,color:C.muted,fontFamily:'Outfit_600SemiBold'}}>{ins.detail}</Txt>
+                <Txt style={{fontSize:10,color:C.muted,fontFamily:F.medium}}>{ins.detail}</Txt>
               </View>
             </View>
           ))}
@@ -3218,14 +3241,14 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
             <View style={{borderWidth:1,borderColor:C.border,backgroundColor:C.card,marginBottom:12}}>
               <View style={{flexDirection:'row',alignItems:'center',padding:14,borderBottomWidth:1,borderBottomColor:C.border,backgroundColor:C.faint}}>
                 <View style={{width:3,height:14,backgroundColor:C.red,marginRight:10}}/>
-                <Txt style={{fontSize:9,fontFamily:'Outfit_700Bold',letterSpacing:2,textTransform:'uppercase',color:C.textDim}}>Submission Rate by Position</Txt>
+                <Txt style={{fontSize:9,fontFamily:F.semi,letterSpacing:2,textTransform:'uppercase',color:C.textDim}}>Submission Rate by Position</Txt>
               </View>
               <View style={{padding:14}}>
                 {[...subStats].sort((a,b)=>b.rate-a.rate||b.successes-a.successes).slice(0,5).map((item,i)=>{
                   const rc = item.rate>=70?C.sage:item.rate>=40?C.amber:item.rate>0?C.red:C.muted;
                   return(
                     <View key={item.pos} style={{flexDirection:'row',alignItems:'center',paddingVertical:8,borderBottomWidth:i<Math.min(subStats.length,5)-1?1:0,borderBottomColor:C.faint}}>
-                      <Txt style={{fontSize:10,fontFamily:'Outfit_700Bold',color:C.muted,width:18}}>{i+1}</Txt>
+                      <Txt style={{fontSize:10,fontFamily:F.semi,color:C.muted,width:18}}>{i+1}</Txt>
                       <View style={{flex:1}}>
                         <Txt style={{fontSize:12,color:C.text}} numberOfLines={1}>{item.pos}</Txt>
                         <Cap style={{fontSize:7,marginTop:2}}>{item.successes} win{item.successes!==1?'s':''} / {item.attempts} attempt{item.attempts!==1?'s':''}</Cap>
@@ -3234,7 +3257,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
                         <View style={{height:6,width:`${item.rate}%`,backgroundColor:rc}}/>
                       </View>
                       <View style={{width:42,borderWidth:1,borderColor:`${rc}44`,backgroundColor:`${rc}10`,paddingHorizontal:4,paddingVertical:2,alignItems:'center'}}>
-                        <Txt style={{fontSize:10,fontFamily:'Outfit_700Bold',color:rc}}>{item.rate}%</Txt>
+                        <Txt style={{fontSize:10,fontFamily:F.semi,color:rc}}>{item.rate}%</Txt>
                       </View>
                     </View>
                   );
@@ -3247,7 +3270,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
           <View style={{borderWidth:1,borderColor:C.border,backgroundColor:C.card,marginBottom:12}}>
             <View style={{flexDirection:'row',alignItems:'center',padding:14,borderBottomWidth:1,borderBottomColor:C.border,backgroundColor:C.faint}}>
               <View style={{width:3,height:14,backgroundColor:C.teal,marginRight:10}}/>
-              <Txt style={{fontSize:9,fontFamily:'Outfit_700Bold',letterSpacing:2,textTransform:'uppercase',color:C.textDim}}>
+              <Txt style={{fontSize:9,fontFamily:F.semi,letterSpacing:2,textTransform:'uppercase',color:C.textDim}}>
                 {insights.length > 0 ? 'More insights unlock as you train' : 'What insights will appear'}
               </Txt>
             </View>
@@ -3274,13 +3297,13 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
                     </View>
                     <View style={{flex:1}}>
                       <View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:3}}>
-                        <Txt style={{fontSize:11,fontFamily:'Outfit_700Bold',color:isActive?C.muted:C.textDim}}>{item.label}</Txt>
+                        <Txt style={{fontSize:11,fontFamily:F.semi,color:isActive?C.muted:C.textDim}}>{item.label}</Txt>
                         {isActive && <View style={{borderWidth:1,borderColor:`${C.sage}55`,paddingHorizontal:5,paddingVertical:1,backgroundColor:`${C.sage}15`}}><Cap style={{fontSize:6,color:C.sage}}>active</Cap></View>}
                       </View>
                       <Txt style={{fontSize:11,color:C.muted,lineHeight:16,marginBottom:4}}>{item.desc}</Txt>
                       <View style={{flexDirection:'row',alignItems:'center',gap:4}}>
                         <Txt style={{fontSize:9,color:C.border}}>Needs:</Txt>
-                        <Txt style={{fontSize:9,color:C.border,fontFamily:'Outfit_600SemiBold'}}>{item.need}</Txt>
+                        <Txt style={{fontSize:9,color:C.border,fontFamily:F.medium}}>{item.need}</Txt>
                       </View>
                     </View>
                   </View>
@@ -3299,18 +3322,18 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
             {trainedToday?(
               <View style={{borderWidth:1,borderColor:`${C.sage}55`,backgroundColor:`${C.sage}0D`,padding:14,flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}>
                 <View>
-                  <Txt style={{fontSize:13,fontFamily:'Outfit_700Bold',color:C.sage}}>✓ Trained Today</Txt>
+                  <Txt style={{fontSize:13,fontFamily:F.semi,color:C.sage}}>✓ Trained Today</Txt>
                   <Cap style={{marginTop:2,color:C.sage}}>{todayStr}</Cap>
                 </View>
                 <TouchableOpacity onPress={()=>onRemoveDay(todayStr)} activeOpacity={0.75}
                   style={{borderWidth:1,borderColor:`${C.red}44`,paddingHorizontal:12,paddingVertical:8}}>
-                  <Txt style={{fontSize:9,fontFamily:'Outfit_700Bold',color:C.red,letterSpacing:1.5,textTransform:'uppercase'}}>Remove</Txt>
+                  <Txt style={{fontSize:9,fontFamily:F.semi,color:C.red,letterSpacing:1.5,textTransform:'uppercase'}}>Remove</Txt>
                 </TouchableOpacity>
               </View>
             ):(
               <TouchableOpacity onPress={()=>onLogDay(todayStr)} activeOpacity={0.8}
                 style={{backgroundColor:C.gold,padding:16,alignItems:'center'}}>
-                <Txt style={{fontSize:10,fontFamily:'Outfit_900Black',letterSpacing:3,textTransform:'uppercase',color:'#0D0D0B'}}>+ Log Today's Training</Txt>
+                <Txt style={{fontSize:10,fontFamily:F.display,letterSpacing:3,textTransform:'uppercase',color:'#0D0D0B'}}>+ Log Today's Training</Txt>
               </TouchableOpacity>
             )}
           </View>
@@ -3324,7 +3347,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
               {label:'Total Days',   value:`${trainedSet.size}`,sub:'logged'},
             ].map(({label,value,sub})=>(
               <View key={label} style={{flex:1,borderWidth:1,borderColor:C.border,padding:10,alignItems:'center',backgroundColor:C.card}}>
-                <Txt style={{fontSize:20,fontFamily:'Outfit_900Black',color:C.gold,lineHeight:24}}>{value}</Txt>
+                <Txt style={{fontSize:20,fontFamily:F.display,color:C.gold,lineHeight:24}}>{value}</Txt>
                 <Cap style={{fontSize:6,textAlign:'center',marginTop:3}}>{sub}</Cap>
                 <Cap style={{fontSize:6,textAlign:'center',color:C.muted,marginTop:1}}>{label}</Cap>
               </View>
@@ -3377,7 +3400,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
                 <View key={i} style={{marginBottom:10}}>
                   <View style={{flexDirection:'row',justifyContent:'space-between',marginBottom:4}}>
                     <Txt style={{fontSize:11,color:C.textDim}}>{m.label}</Txt>
-                    <Txt style={{fontSize:11,fontFamily:'Outfit_700Bold',color:C.teal}}>{m.trained} <Cap style={{fontSize:8}}>days</Cap></Txt>
+                    <Txt style={{fontSize:11,fontFamily:F.semi,color:C.teal}}>{m.trained} <Cap style={{fontSize:8}}>days</Cap></Txt>
                   </View>
                   <View style={{height:8,backgroundColor:C.faint}}>
                     <View style={{height:8,width:`${pct*100}%`,backgroundColor:C.teal}}/>
@@ -3398,7 +3421,7 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
                 return sorted.map(([ds,count])=>(
                   <View key={ds} style={{flexDirection:'row',justifyContent:'space-between',paddingVertical:6,borderBottomWidth:1,borderBottomColor:C.faint}}>
                     <Txt style={{fontSize:11,color:C.muted}}>{new Date(ds).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})}</Txt>
-                    <Txt style={{fontSize:11,fontFamily:'Outfit_700Bold',color:C.blue}}>{count} roll{count!==1?'s':''}</Txt>
+                    <Txt style={{fontSize:11,fontFamily:F.semi,color:C.blue}}>{count} roll{count!==1?'s':''}</Txt>
                   </View>
                 ));
               })()}
@@ -3415,12 +3438,12 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
               <View style={{flexDirection:'row',gap:6}}>
                 <TouchableOpacity onPress={()=>setScope('all')} activeOpacity={0.75}
                   style={{borderWidth:1,borderColor:scope==='all'?C.gold:C.border,backgroundColor:scope==='all'?C.goldDim:'transparent',paddingHorizontal:14,paddingVertical:8}}>
-                  <Txt style={{fontSize:9,fontFamily:scope==='all'?'Outfit_700Bold':'Outfit_400Regular',color:scope==='all'?C.gold:C.muted,letterSpacing:1.5,textTransform:'uppercase'}}>All Sessions</Txt>
+                  <Txt style={{fontSize:9,fontFamily:scope==='all'?F.semi:F.body,color:scope==='all'?C.gold:C.muted,letterSpacing:1.5,textTransform:'uppercase'}}>All Sessions</Txt>
                 </TouchableOpacity>
                 {rolls.slice(0,8).map((r,i)=>(
                   <TouchableOpacity key={r.id} onPress={()=>setScope(r.id)} activeOpacity={0.75}
                     style={{borderWidth:1,borderColor:scope===r.id?C.gold:C.border,backgroundColor:scope===r.id?C.goldDim:'transparent',paddingHorizontal:12,paddingVertical:8}}>
-                    <Txt style={{fontSize:9,fontFamily:scope===r.id?'Outfit_700Bold':'Outfit_400Regular',color:scope===r.id?C.gold:C.muted,letterSpacing:1.5,textTransform:'uppercase'}}>#{rolls.length-i}{r.partner?` ${r.partner}`:''}</Txt>
+                    <Txt style={{fontSize:9,fontFamily:scope===r.id?F.semi:F.body,color:scope===r.id?C.gold:C.muted,letterSpacing:1.5,textTransform:'uppercase'}}>#{rolls.length-i}{r.partner?` ${r.partner}`:''}</Txt>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -3488,12 +3511,12 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
               <View style={{flexDirection:'row',gap:6}}>
                 <TouchableOpacity onPress={()=>setScope('all')} activeOpacity={0.75}
                   style={{borderWidth:1,borderColor:scope==='all'?C.gold:C.border,backgroundColor:scope==='all'?C.goldDim:'transparent',paddingHorizontal:14,paddingVertical:8}}>
-                  <Txt style={{fontSize:9,fontFamily:scope==='all'?'Outfit_700Bold':'Outfit_400Regular',color:scope==='all'?C.gold:C.muted,letterSpacing:1.5,textTransform:'uppercase'}}>All Sessions</Txt>
+                  <Txt style={{fontSize:9,fontFamily:scope==='all'?F.semi:F.body,color:scope==='all'?C.gold:C.muted,letterSpacing:1.5,textTransform:'uppercase'}}>All Sessions</Txt>
                 </TouchableOpacity>
                 {rolls.slice(0,8).map((r,i)=>(
                   <TouchableOpacity key={r.id} onPress={()=>setScope(r.id)} activeOpacity={0.75}
                     style={{borderWidth:1,borderColor:scope===r.id?C.gold:C.border,backgroundColor:scope===r.id?C.goldDim:'transparent',paddingHorizontal:12,paddingVertical:8}}>
-                    <Txt style={{fontSize:9,fontFamily:scope===r.id?'Outfit_700Bold':'Outfit_400Regular',color:scope===r.id?C.gold:C.muted,letterSpacing:1.5,textTransform:'uppercase'}}>#{rolls.length-i}{r.partner?` ${r.partner}`:''}</Txt>
+                    <Txt style={{fontSize:9,fontFamily:scope===r.id?F.semi:F.body,color:scope===r.id?C.gold:C.muted,letterSpacing:1.5,textTransform:'uppercase'}}>#{rolls.length-i}{r.partner?` ${r.partner}`:''}</Txt>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -3563,12 +3586,12 @@ function TrackScreen({ activeRoll, onStartRoll, onEndRoll, onTogglePause, onMuta
           <View style={{ marginBottom:8 }}><BeltBadge belt={activeProfile?.belt||'white'} stripes={activeProfile?.stripes||0} size="lg"/></View>
           {activeProfile?.gym ? <Txt style={{ fontSize:9, color:C.muted, letterSpacing:1, marginBottom:28 }}>{activeProfile.gym}</Txt> : <View style={{ height:28 }}/>}
           {/* Brand tagline */}
-          <Txt style={{ fontSize:22, fontFamily:'Outfit_900Black', color:C.text, letterSpacing:-0.5, textAlign:'center', lineHeight:28 }}>Train. Measure.</Txt>
-          <Txt style={{ fontSize:22, fontFamily:'Outfit_900Black', color:C.gold, letterSpacing:-0.5, textAlign:'center', lineHeight:28, marginBottom:36 }}>Improve. Repeat.</Txt>
+          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.text, letterSpacing:-0.5, textAlign:'center', lineHeight:28 }}>Train. Measure.</Txt>
+          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.gold, letterSpacing:-0.5, textAlign:'center', lineHeight:28, marginBottom:36 }}>Improve. Repeat.</Txt>
           {/* CTA */}
           <TouchableOpacity onPress={()=>setShowStart(true)} activeOpacity={0.8}
             style={{ backgroundColor:C.gold, paddingHorizontal:44, paddingVertical:16, alignItems:'center' }}>
-            <Txt style={{ fontSize:10, fontFamily:'Outfit_900Black', letterSpacing:3.5, textTransform:'uppercase', color:'#0D0D0B' }}>Start Session</Txt>
+            <Txt style={{ fontSize:10, fontFamily:F.display, letterSpacing:3.5, textTransform:'uppercase', color:'#0D0D0B' }}>Start Session</Txt>
           </TouchableOpacity>
           <Txt style={{ fontSize:8, color:C.border, letterSpacing:2, textTransform:'uppercase', marginTop:40 }}>Structured practice. Measured progress.</Txt>
         </View>
@@ -3577,13 +3600,13 @@ function TrackScreen({ activeRoll, onStartRoll, onEndRoll, onTogglePause, onMuta
           {/* Active roll header */}
           <View style={{ backgroundColor:C.faint, borderBottomWidth:1, borderBottomColor:isPaused?C.amber:`${C.gold}33`, flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:14 }}>
             <View>
-              <Txt style={{ fontSize:8, color:isPaused?C.amber:C.gold, fontFamily:'Outfit_700Bold', letterSpacing:2.5, textTransform:'uppercase', marginBottom:2 }}>{isPaused?'⏸ Paused':'● Live'}</Txt>
-              <Txt style={{ fontSize:13, fontFamily:'Outfit_700Bold' }}>{activeRoll.partner||'Training Session'}</Txt>
+              <Txt style={{ fontSize:8, color:isPaused?C.amber:C.gold, fontFamily:F.semi, letterSpacing:2.5, textTransform:'uppercase', marginBottom:2 }}>{isPaused?'⏸ Paused':'● Live'}</Txt>
+              <Txt style={{ fontSize:13, fontFamily:F.semi }}>{activeRoll.partner||'Training Session'}</Txt>
             </View>
             <View style={{ flexDirection:'row', gap:8 }}>
               <PauseButton isPaused={isPaused} onToggle={onTogglePause} small/>
               <TouchableOpacity onPress={()=>setShowEnd(true)} activeOpacity={0.75} style={{ backgroundColor:C.sage, paddingHorizontal:14, paddingVertical:8, alignItems:'center', justifyContent:'center' }}>
-                <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.offWhite }}>End Roll</Txt>
+                <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.offWhite }}>End Roll</Txt>
               </TouchableOpacity>
             </View>
           </View>
@@ -3617,9 +3640,9 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
           <TouchableOpacity onPress={()=>setViewing(null)} activeOpacity={0.7} style={{ padding:4 }}>
             <Txt style={{ fontSize:16, color:C.muted }}>←</Txt>
           </TouchableOpacity>
-          <Txt style={{ flex:1, fontSize:14, fontFamily:'Outfit_700Bold' }}>
+          <Txt style={{ flex:1, fontSize:14, fontFamily:F.semi }}>
             Roll {String(isActive ? rolls.length+1 : rolls.length - rolls.findIndex(r=>r.id===viewingRoll.id)).padStart(2,'0')}
-            {current.partner?<Txt style={{ color:C.muted, fontFamily:'Outfit_400Regular' }}> · {current.partner}</Txt>:''}
+            {current.partner?<Txt style={{ color:C.muted, fontFamily:F.body }}> · {current.partner}</Txt>:''}
           </Txt>
         </View>
         <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
@@ -3631,7 +3654,7 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
           <View style={{ backgroundColor:C.faint, borderTopWidth:1, borderTopColor:C.border, flexDirection:'row', gap:8, padding:12 }}>
             <PauseButton isPaused={isPaused} onToggle={onTogglePause} small/>
             <TouchableOpacity onPress={()=>setShowEnd(true)} activeOpacity={0.75} style={{ flex:1, backgroundColor:C.sage, alignItems:'center', justifyContent:'center', minHeight:44 }}>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_800ExtraBold', color:C.offWhite, letterSpacing:2, textTransform:'uppercase' }}>End Roll</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.bold, color:C.offWhite, letterSpacing:2, textTransform:'uppercase' }}>End Roll</Txt>
             </TouchableOpacity>
           </View>
           <EndRollModal visible={showEnd} submissions={trackingProps.submissions} onEnd={result=>{ onEndRoll(result); setShowEnd(false); setViewing(null); }} onCancel={()=>setShowEnd(false)}/>
@@ -3647,8 +3670,8 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
           style={{ borderWidth:1, borderColor:isPaused?C.amber:`${C.gold}44`, backgroundColor:C.faint, padding:14, marginBottom:12 }}>
           <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
             <View>
-              <Txt style={{ fontSize:8, color:isPaused?C.amber:C.gold, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', marginBottom:2 }}>{isPaused?'⏸ Paused':'● Live Session'}</Txt>
-              <Txt style={{ fontSize:13, fontFamily:'Outfit_700Bold' }}>{activeRoll.partner||'Training'}</Txt>
+              <Txt style={{ fontSize:8, color:isPaused?C.amber:C.gold, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', marginBottom:2 }}>{isPaused?'⏸ Paused':'● Live Session'}</Txt>
+              <Txt style={{ fontSize:13, fontFamily:F.semi }}>{activeRoll.partner||'Training'}</Txt>
             </View>
             <ScoreComparison roll={activeRoll} compact/>
           </View>
@@ -3744,7 +3767,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
             <Txt style={{ fontSize:16, color:C.muted }}>←</Txt>
           </TouchableOpacity>
           <View style={{ flex:1 }}>
-            <Txt style={{ fontSize:13, fontFamily:'Outfit_700Bold' }}>
+            <Txt style={{ fontSize:13, fontFamily:F.semi }}>
               Round vs {activeRound.opponent||'Unknown'}
               <Txt style={{ fontSize:9, color:C.teal }}> {activeRound.oppAbbr}</Txt>
             </Txt>
@@ -3755,7 +3778,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
             )}
           </View>
           <TouchableOpacity onPress={()=>{ setEndMeta({ endType:null, result:'win', method:'points', submissionName:'', submissionWinner:'me', matchTime:'' }); setShowEndRound(true); }} activeOpacity={0.75} style={{ backgroundColor:C.sage, paddingHorizontal:14, paddingVertical:8 }}>
-            <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', color:C.offWhite, letterSpacing:2, textTransform:'uppercase' }}>End Round</Txt>
+            <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.offWhite, letterSpacing:2, textTransform:'uppercase' }}>End Round</Txt>
           </TouchableOpacity>
         </View>
         <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }} keyboardShouldPersistTaps="handled">
@@ -3766,7 +3789,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
             <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
               <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
                 <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
-                <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold', marginBottom:20 }}>How did the round end?</Txt>
+                <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>How did the round end?</Txt>
 
                 {/* End type buttons */}
                 <View style={{ flexDirection:'row', gap:8, marginBottom:20 }}>
@@ -3777,7 +3800,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                     <TouchableOpacity key={type} onPress={()=>setEndMeta(m=>({ ...m, endType:type, submissionName:'', submissionWinner:'me', result:'win', method:type==='submission'?'submission':'points' }))} activeOpacity={0.75}
                       style={{ flex:1, borderWidth:2, borderColor:endMeta.endType===type?C.gold:C.border, backgroundColor:endMeta.endType===type?C.goldDim:'transparent', padding:14 }}>
                       <Txt style={{ fontSize:20, marginBottom:6 }}>{icon}</Txt>
-                      <Txt style={{ fontSize:10, fontFamily:'Outfit_800ExtraBold', letterSpacing:1.5, textTransform:'uppercase', color:endMeta.endType===type?C.gold:C.textDim, marginBottom:4 }}>{label}</Txt>
+                      <Txt style={{ fontSize:10, fontFamily:F.bold, letterSpacing:1.5, textTransform:'uppercase', color:endMeta.endType===type?C.gold:C.textDim, marginBottom:4 }}>{label}</Txt>
                       <Txt style={{ fontSize:9, color:C.muted, lineHeight:14 }}>{desc}</Txt>
                     </TouchableOpacity>
                   ))}
@@ -3791,7 +3814,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                       {Object.entries(RESULT_CFG).map(([k,v])=>(
                         <TouchableOpacity key={k} onPress={()=>setEndMeta(m=>({...m,result:k}))} activeOpacity={0.75}
                           style={{ flex:1, paddingVertical:12, borderWidth:2, borderColor:endMeta.result===k?v.color:C.border, backgroundColor:endMeta.result===k?`${v.color}18`:'transparent', alignItems:'center' }}>
-                          <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:endMeta.result===k?v.color:C.muted }}>{v.icon} {v.label}</Txt>
+                          <Txt style={{ fontSize:12, fontFamily:F.semi, color:endMeta.result===k?v.color:C.muted }}>{v.icon} {v.label}</Txt>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -3800,7 +3823,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                       <TextInput
                         value={endMeta.matchTime||''} onChangeText={t=>setEndMeta(m=>({...m,matchTime:t}))}
                         placeholder="e.g. 6:00" placeholderTextColor={C.muted}
-                        style={{ backgroundColor:'transparent', borderBottomWidth:1, borderBottomColor:C.borderMid, color:C.text, fontSize:14, paddingVertical:10, fontFamily:'Outfit_400Regular' }}/>
+                        style={{ backgroundColor:'transparent', borderBottomWidth:1, borderBottomColor:C.borderMid, color:C.text, fontSize:14, paddingVertical:10, fontFamily:F.body }}/>
                     </View>
                   </>
                 )}
@@ -3810,7 +3833,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                   <>
                     {/* Submission overrides result */}
                     <View style={{ borderWidth:1, borderColor:`${C.gold}44`, backgroundColor:C.goldDim, padding:10, marginBottom:14 }}>
-                      <Txt style={{ fontSize:9, color:C.gold, fontFamily:'Outfit_700Bold', letterSpacing:1.5, textTransform:'uppercase', marginBottom:2 }}>⚡ Submission overrides points</Txt>
+                      <Txt style={{ fontSize:9, color:C.gold, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', marginBottom:2 }}>⚡ Submission overrides points</Txt>
                       <Txt style={{ fontSize:11, color:C.textDim }}>Whoever gets the submission wins — regardless of score.</Txt>
                     </View>
                     <Cap style={{ marginBottom:8 }}>Who got the submission?</Cap>
@@ -3818,8 +3841,8 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                       {[['me','I submitted them','WIN'],['opp','I was submitted','LOSS']].map(([val,lbl,outcome])=>(
                         <TouchableOpacity key={val} onPress={()=>setEndMeta(m=>({...m,submissionWinner:val,result:val==='me'?'win':'loss'}))} activeOpacity={0.75}
                           style={{ flex:1, paddingVertical:12, borderWidth:2, borderColor:endMeta.submissionWinner===val?(val==='me'?C.sage:C.red):C.border, alignItems:'center', backgroundColor:endMeta.submissionWinner===val?(val==='me'?`${C.sage}18`:`${C.red}18`):'transparent' }}>
-                          <Txt style={{ fontSize:11, fontFamily:'Outfit_900Black', color:endMeta.submissionWinner===val?(val==='me'?C.sage:C.red):C.muted, marginBottom:3 }}>{outcome}</Txt>
-                          <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1, textTransform:'uppercase', color:endMeta.submissionWinner===val?(val==='me'?C.sage:C.red):C.muted }}>{lbl}</Txt>
+                          <Txt style={{ fontSize:11, fontFamily:F.display, color:endMeta.submissionWinner===val?(val==='me'?C.sage:C.red):C.muted, marginBottom:3 }}>{outcome}</Txt>
+                          <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1, textTransform:'uppercase', color:endMeta.submissionWinner===val?(val==='me'?C.sage:C.red):C.muted }}>{lbl}</Txt>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -3843,7 +3866,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                         placeholder="Or type custom technique…"
                         placeholderTextColor={C.muted}
                         returnKeyType="done"
-                        style={{ flex:1, color:C.text, fontSize:13, fontFamily:'Outfit_400Regular',
+                        style={{ flex:1, color:C.text, fontSize:13, fontFamily:F.body,
                           padding:12, backgroundColor:'transparent' }}/>
                       {endMeta.submissionName && !DEF_SUBS.includes(endMeta.submissionName) && (
                         <View style={{ paddingHorizontal:10 }}>
@@ -3856,7 +3879,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                       <TextInput
                         value={endMeta.matchTime||''} onChangeText={t=>setEndMeta(m=>({...m,matchTime:t}))}
                         placeholder="e.g. 4:47" placeholderTextColor={C.muted}
-                        style={{ backgroundColor:'transparent', borderBottomWidth:1, borderBottomColor:C.borderMid, color:C.text, fontSize:14, paddingVertical:10, fontFamily:'Outfit_400Regular' }}/>
+                        style={{ backgroundColor:'transparent', borderBottomWidth:1, borderBottomColor:C.borderMid, color:C.text, fontSize:14, paddingVertical:10, fontFamily:F.body }}/>
                     </View>
                   </>
                 )}
@@ -3888,9 +3911,9 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
           <TouchableOpacity onPress={()=>setActiveComp(null)} activeOpacity={0.7} style={{ padding:4 }}>
             <Txt style={{ fontSize:16, color:C.muted }}>←</Txt>
           </TouchableOpacity>
-          <Txt style={{ flex:1, fontSize:14, fontFamily:'Outfit_800ExtraBold' }} numberOfLines={1}>{activeComp.name}</Txt>
+          <Txt style={{ flex:1, fontSize:14, fontFamily:F.bold }} numberOfLines={1}>{activeComp.name}</Txt>
           <TouchableOpacity onPress={()=>setEditingComp(activeComp)} activeOpacity={0.75} style={{ borderWidth:1, borderColor:C.border, paddingHorizontal:10, paddingVertical:6 }}>
-            <Txt style={{ fontSize:8, color:C.muted, fontFamily:'Outfit_700Bold', letterSpacing:1.5, textTransform:'uppercase' }}>Edit</Txt>
+            <Txt style={{ fontSize:8, color:C.muted, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase' }}>Edit</Txt>
           </TouchableOpacity>
           <TouchableOpacity onPress={()=>deleteComp(activeComp.id)} activeOpacity={0.75} style={{ borderWidth:1, borderColor:C.border, paddingHorizontal:10, paddingVertical:6 }}>
             <Txt style={{ fontSize:14, color:C.muted }}>✕</Txt>
@@ -3900,13 +3923,13 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
           {/* Header stats */}
           <View style={{ backgroundColor:C.faint, borderWidth:1, borderColor:`${C.gold}33`, padding:16, marginBottom:20 }}>
             <Cap style={{ color:C.gold, marginBottom:4 }}>Competition Record</Cap>
-            <Txt style={{ fontSize:18, fontFamily:'Outfit_900Black', marginBottom:4 }}>{activeComp.name}</Txt>
+            <Txt style={{ fontSize:18, fontFamily:F.display, marginBottom:4 }}>{activeComp.name}</Txt>
             {activeComp.location && <Txt style={{ fontSize:11, color:C.muted }}>{activeComp.location}</Txt>}
             <Cap style={{ marginTop:2 }}>{activeComp.gi} · {activeComp.weightClass}</Cap>
             <View style={{ flexDirection:'row', gap:20, marginTop:12 }}>
               {[['W',wins,C.sage],['L',losses,C.red],['D',draws,C.amber]].map(([l,v,c])=>(
                 <View key={l} style={{ alignItems:'center' }}>
-                  <Txt style={{ fontSize:26, fontFamily:'Outfit_900Black', color:v>0?c:C.border }}>{v}</Txt>
+                  <Txt style={{ fontSize:26, fontFamily:F.display, color:v>0?c:C.border }}>{v}</Txt>
                   <Cap style={{ fontSize:7 }}>{l}</Cap>
                 </View>
               ))}
@@ -3916,7 +3939,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
           <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
             <Cap>{activeComp.rounds.length} Round{activeComp.rounds.length!==1?'s':''}</Cap>
             <TouchableOpacity onPress={()=>setShowStartRound(true)} activeOpacity={0.75} style={{ backgroundColor:C.gold, paddingHorizontal:16, paddingVertical:8 }}>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_800ExtraBold', color:'#0F0F0D', letterSpacing:2, textTransform:'uppercase' }}>+ Start Round</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.bold, color:'#0F0F0D', letterSpacing:2, textTransform:'uppercase' }}>+ Start Round</Txt>
             </TouchableOpacity>
           </View>
 
@@ -3932,24 +3955,24 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                 <View style={{ width:3, backgroundColor:rc?rc.color:C.border }}/>
                 <View style={{ flex:1, padding:14 }}>
                   <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:4 }}>
-                    {isLive && <View style={{ borderWidth:1, borderColor:`${C.gold}44`, paddingHorizontal:5, paddingVertical:1 }}><Txt style={{ fontSize:8, color:C.gold, fontFamily:'Outfit_700Bold', letterSpacing:2 }}>LIVE</Txt></View>}
-                    {rc&&!isLive && <View style={{ borderWidth:1, borderColor:`${rc.color}44`, paddingHorizontal:5, paddingVertical:1 }}><Txt style={{ fontSize:8, color:rc.color, fontFamily:'Outfit_700Bold', letterSpacing:2 }}>{rc.icon} {rc.label.toUpperCase()}</Txt></View>}
-                    <Txt style={{ fontSize:13, fontFamily:'Outfit_700Bold' }}>Round {i+1}</Txt>
+                    {isLive && <View style={{ borderWidth:1, borderColor:`${C.gold}44`, paddingHorizontal:5, paddingVertical:1 }}><Txt style={{ fontSize:8, color:C.gold, fontFamily:F.semi, letterSpacing:2 }}>LIVE</Txt></View>}
+                    {rc&&!isLive && <View style={{ borderWidth:1, borderColor:`${rc.color}44`, paddingHorizontal:5, paddingVertical:1 }}><Txt style={{ fontSize:8, color:rc.color, fontFamily:F.semi, letterSpacing:2 }}>{rc.icon} {rc.label.toUpperCase()}</Txt></View>}
+                    <Txt style={{ fontSize:13, fontFamily:F.semi }}>Round {i+1}</Txt>
                     <Txt style={{ fontSize:12, color:C.textDim }}>{round.opponent||'Unknown'}</Txt>
-                    {round.oppAbbr && <View style={{ borderWidth:1, borderColor:`${C.teal}44`, paddingHorizontal:5, paddingVertical:1 }}><Txt style={{ fontSize:8, color:C.teal, fontFamily:'Outfit_700Bold', letterSpacing:1.5 }}>{round.oppAbbr}</Txt></View>}
+                    {round.oppAbbr && <View style={{ borderWidth:1, borderColor:`${C.teal}44`, paddingHorizontal:5, paddingVertical:1 }}><Txt style={{ fontSize:8, color:C.teal, fontFamily:F.semi, letterSpacing:1.5 }}>{round.oppAbbr}</Txt></View>}
                   </View>
                   {round.oppBelt && (
                     <View style={{ marginBottom:4 }}>
                       <BeltBadge belt={round.oppBelt} stripes={round.oppStripes||0} size="sm"/>
                     </View>
                   )}
-                  <Txt style={{ fontSize:9, color:C.muted }}>{fmtDateTime(round.startedAt)}{round.matchTime?` · ⏱ ${round.matchTime}`:''}</Txt>
+                  <Txt style={{ fontSize:10, color:C.muted }}>{fmtDateTime(round.startedAt)}{round.matchTime?` · ⏱ ${round.matchTime}`:''}</Txt>
                   {round.notes && <Txt style={{ fontSize:11, color:C.muted, marginTop:6, fontStyle:'italic' }}>{round.notes}</Txt>}
                 </View>
                 <View style={{ alignItems:'center', justifyContent:'center', padding:12, gap:4 }}>
-                  <Txt style={{ fontSize:18, fontFamily:'Outfit_900Black', color:C.gold }}>{rMyPts}</Txt>
+                  <Txt style={{ fontSize:18, fontFamily:F.display, color:C.gold }}>{rMyPts}</Txt>
                   <Txt style={{ fontSize:9, color:C.border }}>·</Txt>
-                  <Txt style={{ fontSize:18, fontFamily:'Outfit_900Black', color:C.stone }}>{rOpPts}</Txt>
+                  <Txt style={{ fontSize:18, fontFamily:F.display, color:C.stone }}>{rOpPts}</Txt>
                 </View>
                 {/* Edit button */}
                 {!isLive && (
@@ -3973,7 +3996,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
             <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
               <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
                 <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
-                  <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold', marginBottom:4 }}>Edit Round</Txt>
+                  <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:4 }}>Edit Round</Txt>
                   <Cap style={{ marginBottom:20, color:C.muted }}>vs {editingRound.opponent||'Unknown'}</Cap>
 
                   {/* Result */}
@@ -3984,7 +4007,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                         style={{ flex:1, paddingVertical:12, borderWidth:2,
                           borderColor:editingRound.result===k?v.color:C.border,
                           backgroundColor:editingRound.result===k?`${v.color}18`:'transparent', alignItems:'center' }}>
-                        <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:editingRound.result===k?v.color:C.muted }}>{v.icon} {v.label}</Txt>
+                        <Txt style={{ fontSize:12, fontFamily:F.semi, color:editingRound.result===k?v.color:C.muted }}>{v.icon} {v.label}</Txt>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -3997,7 +4020,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                         style={{ flex:1, paddingVertical:10, borderWidth:2,
                           borderColor:editingRound.endType===k?C.gold:C.border,
                           backgroundColor:editingRound.endType===k?C.goldDim:'transparent', alignItems:'center' }}>
-                        <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:editingRound.endType===k?C.gold:C.muted }}>{l}</Txt>
+                        <Txt style={{ fontSize:11, fontFamily:F.semi, color:editingRound.endType===k?C.gold:C.muted }}>{l}</Txt>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -4012,7 +4035,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                             style={{ flex:1, paddingVertical:10, borderWidth:2,
                               borderColor:editingRound.submissionWinner===val?(val==='me'?C.sage:C.red):C.border,
                               backgroundColor:editingRound.submissionWinner===val?(val==='me'?`${C.sage}18`:`${C.red}18`):'transparent', alignItems:'center' }}>
-                            <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold',
+                            <Txt style={{ fontSize:10, fontFamily:F.semi,
                               color:editingRound.submissionWinner===val?(val==='me'?C.sage:C.red):C.muted }}>{lbl}</Txt>
                           </TouchableOpacity>
                         ))}
@@ -4036,7 +4059,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                           placeholder="Or type custom technique…"
                           placeholderTextColor={C.muted}
                           returnKeyType="done"
-                          style={{ color:C.text, fontSize:13, fontFamily:'Outfit_400Regular', padding:12 }}/>
+                          style={{ color:C.text, fontSize:13, fontFamily:F.body, padding:12 }}/>
                       </View>
                     </>
                   )}
@@ -4048,7 +4071,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                     onChangeText={t=>setEditingRound(r=>({...r,opponent:t}))}
                     placeholder="Opponent name…" placeholderTextColor={C.muted}
                     style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                      fontFamily:'Outfit_400Regular', padding:12, marginBottom:16 }}/>
+                      fontFamily:F.body, padding:12, marginBottom:16 }}/>
 
                   {/* Match time */}
                   <Cap style={{ marginBottom:6 }}>Match Duration</Cap>
@@ -4057,7 +4080,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                     onChangeText={t=>setEditingRound(r=>({...r,matchTime:t}))}
                     placeholder="e.g. 5:00" placeholderTextColor={C.muted}
                     style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                      fontFamily:'Outfit_400Regular', padding:12, marginBottom:24 }}/>
+                      fontFamily:F.body, padding:12, marginBottom:24 }}/>
 
                   {/* Notes */}
                   <Cap style={{ marginBottom:6 }}>Notes</Cap>
@@ -4067,7 +4090,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                     placeholder="Optional notes…" placeholderTextColor={C.muted}
                     multiline numberOfLines={3}
                     style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                      fontFamily:'Outfit_400Regular', padding:12, marginBottom:24, minHeight:72 }}/>
+                      fontFamily:F.body, padding:12, marginBottom:24, minHeight:72 }}/>
 
                   <View style={{ flexDirection:'row', gap:8 }}>
                     <TouchableOpacity onPress={()=>{
@@ -4079,7 +4102,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
                       setEditingRound(null);
                     }} activeOpacity={0.8}
                       style={{ flex:1, backgroundColor:C.gold, padding:16, alignItems:'center' }}>
-                      <Txt style={{ fontSize:10, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:'#0F0F0D' }}>Save Changes</Txt>
+                      <Txt style={{ fontSize:10, fontFamily:F.display, letterSpacing:2, textTransform:'uppercase', color:'#0F0F0D' }}>Save Changes</Txt>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={()=>setEditingRound(null)} activeOpacity={0.75}
                       style={{ borderWidth:1, borderColor:C.border, paddingHorizontal:20, alignItems:'center', justifyContent:'center' }}>
@@ -4123,14 +4146,14 @@ function StartRoundModal({ visible, roundNum, onStart, onCancel }) {
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
         <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
-            <Txt style={{ fontSize:16, fontFamily:'Outfit_800ExtraBold', marginBottom:4 }}>Round {roundNum}</Txt>
+            <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:4 }}>Round {roundNum}</Txt>
             <Cap style={{ marginBottom:20 }}>Enter opponent details to begin tracking</Cap>
 
             {/* Opponent name */}
             <FieldInput label="Opponent Full Name" value={oppName} onChangeText={setOppName} placeholder="First Last"/>
             {oppName.trim() && (
               <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginTop:-8, marginBottom:16 }}>
-                <Txt style={{ fontSize:10, color:C.teal }}>Abbreviated: <Txt style={{ fontFamily:'Outfit_700Bold' }}>{abbr}</Txt></Txt>
+                <Txt style={{ fontSize:10, color:C.teal }}>Abbreviated: <Txt style={{ fontFamily:F.semi }}>{abbr}</Txt></Txt>
                 <BeltBadge belt={oppBelt} stripes={oppStripes} size="sm"/>
               </View>
             )}
@@ -4145,7 +4168,7 @@ function StartRoundModal({ visible, roundNum, onStart, onCancel }) {
                     <TouchableOpacity key={b} onPress={()=>setOppBelt(b)} activeOpacity={0.75}
                       style={{ paddingVertical:7, paddingHorizontal:10, borderWidth:2,
                         borderColor:oppBelt===b?C.gold:C.border, backgroundColor:oppBelt===b?bc.bg:C.faint }}>
-                      <Txt style={{ fontSize:8, fontFamily:'Outfit_800ExtraBold', letterSpacing:1,
+                      <Txt style={{ fontSize:8, fontFamily:F.bold, letterSpacing:1,
                         textTransform:'uppercase', color:oppBelt===b?bc.text:C.muted }}>{bc.label}</Txt>
                     </TouchableOpacity>
                   ); })}
@@ -4158,7 +4181,7 @@ function StartRoundModal({ visible, roundNum, onStart, onCancel }) {
                   return (
                     <TouchableOpacity key={b} onPress={()=>setOppBelt(b)} activeOpacity={0.75}
                       style={{ paddingVertical:8, paddingHorizontal:12, borderWidth:2, borderColor:oppBelt===b?C.gold:C.border, backgroundColor:oppBelt===b?bc.bg:C.faint }}>
-                      <Txt style={{ fontSize:8, fontFamily:'Outfit_800ExtraBold', letterSpacing:1.5, textTransform:'uppercase', color:oppBelt===b?bc.text:C.muted }}>{bc.label}</Txt>
+                      <Txt style={{ fontSize:8, fontFamily:F.bold, letterSpacing:1.5, textTransform:'uppercase', color:oppBelt===b?bc.text:C.muted }}>{bc.label}</Txt>
                     </TouchableOpacity>
                   );
                 })}
@@ -4172,7 +4195,7 @@ function StartRoundModal({ visible, roundNum, onStart, onCancel }) {
                 {[0,1,2,3,4].map(n => (
                   <TouchableOpacity key={n} onPress={()=>setOppStripes(n)} activeOpacity={0.75}
                     style={{ flex:1, minHeight:40, borderWidth:1, borderColor:oppStripes===n?C.gold:C.border, backgroundColor:oppStripes===n?C.goldDim:'transparent', alignItems:'center', justifyContent:'center' }}>
-                    <Txt style={{ fontSize:13, fontFamily:'Outfit_700Bold', color:oppStripes===n?C.gold:C.muted }}>{n}</Txt>
+                    <Txt style={{ fontSize:13, fontFamily:F.semi, color:oppStripes===n?C.gold:C.muted }}>{n}</Txt>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -4405,11 +4428,11 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           backgroundColor:selected===a.id?C.goldDim:'transparent' }}>
         <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:4 }}>
           <ProfileAvatar name={a.name||'?'} size={22} belt={a.belt||'white'}/>
-          <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:selected===a.id?C.gold:C.text, flex:1 }} numberOfLines={1}>{a.name||'Unnamed'}</Txt>
+          <Txt style={{ fontSize:12, fontFamily:F.semi, color:selected===a.id?C.gold:C.text, flex:1 }} numberOfLines={1}>{a.name||'Unnamed'}</Txt>
           {isCoachUser && (
             <View style={{ borderWidth:1, borderColor:`${C.teal}55`, backgroundColor:`${C.teal}15`,
               paddingHorizontal:5, paddingVertical:2 }}>
-              <Txt style={{ fontSize:7, fontFamily:'Outfit_700Bold', color:C.teal, letterSpacing:1 }}>COACH</Txt>
+              <Txt style={{ fontSize:7, fontFamily:F.semi, color:C.teal, letterSpacing:1 }}>COACH</Txt>
             </View>
           )}
         </View>
@@ -4431,7 +4454,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
         <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
           <GSLLogo size={28}/>
           <View style={{ flex:1 }}>
-            <Txt style={{ fontSize:11, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:C.text }}>
+            <Txt style={{ fontSize:11, fontFamily:F.display, letterSpacing:2, textTransform:'uppercase', color:C.text }}>
               {isAdmin ? 'Admin Dashboard' : 'Coach Dashboard'}
             </Txt>
             {isAdmin && <Cap style={{ color:C.gold, fontSize:7 }}>Grounded Skills Lab · All Academies</Cap>}
@@ -4442,7 +4465,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           </TouchableOpacity>
           <TouchableOpacity onPress={onSwitchToAthlete} activeOpacity={0.75}
             style={{ borderWidth:1, borderColor:`${C.gold}66`, backgroundColor:C.goldDim, paddingHorizontal:8, paddingVertical:5 }}>
-            <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', letterSpacing:1, textTransform:'uppercase', color:C.gold }}>My Training</Txt>
+            <Txt style={{ fontSize:8, fontFamily:F.semi, letterSpacing:1, textTransform:'uppercase', color:C.gold }}>My Training</Txt>
           </TouchableOpacity>
           <TouchableOpacity onPress={()=>supabase.auth.signOut()} activeOpacity={0.75}
             style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.faint, paddingHorizontal:8, paddingVertical:5 }}>
@@ -4458,7 +4481,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 style={{ paddingHorizontal:14, paddingVertical:7, borderWidth:1,
                   borderColor:activeView===key?C.gold:C.border,
                   backgroundColor:activeView===key?C.goldDim:'transparent' }}>
-                <Txt style={{ fontSize:9, fontFamily:activeView===key?'Outfit_700Bold':'Outfit_400Regular',
+                <Txt style={{ fontSize:9, fontFamily:activeView===key?F.semi:F.body,
                   letterSpacing:1.5, textTransform:'uppercase',
                   color:activeView===key?C.gold:C.muted }}>{label}</Txt>
               </TouchableOpacity>
@@ -4481,14 +4504,14 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
             <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
               <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 1 · Share Signup Link</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 1 · Share Signup Link</Txt>
             </View>
             <View style={{ padding:14 }}>
               <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
                 Share this link with athletes. They sign up themselves with their name, email and password.
               </Txt>
               <View style={{ borderWidth:1, borderColor:C.borderMid, backgroundColor:C.faint, padding:12, marginBottom:10 }}>
-                <Txt style={{ fontSize:12, color:C.gold, fontFamily:'Outfit_600SemiBold' }}>
+                <Txt style={{ fontSize:12, color:C.gold, fontFamily:F.medium }}>
                   https://bjjanalytics.netlify.app
                 </Txt>
               </View>
@@ -4500,7 +4523,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 }
               }} activeOpacity={0.75}
                 style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, padding:12, alignItems:'center' }}>
-                <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.gold }}>Copy Link</Txt>
+                <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.gold }}>Copy Link</Txt>
               </TouchableOpacity>
             </View>
           </View>
@@ -4509,7 +4532,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
             <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
               <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 2 · Create Account for Athlete</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 2 · Create Account for Athlete</Txt>
             </View>
             <View style={{ padding:14 }}>
               <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
@@ -4521,14 +4544,14 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                   <TextInput value={newAthleteFirst} onChangeText={setNewAthleteFirst}
                     placeholder="First" placeholderTextColor={C.muted} autoCapitalize="words"
                     style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                      fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint }}/>
+                      fontFamily:F.body, padding:10, backgroundColor:C.faint }}/>
                 </View>
                 <View style={{ flex:1 }}>
                   <Cap style={{ marginBottom:6 }}>Last Name</Cap>
                   <TextInput value={newAthleteLast} onChangeText={setNewAthleteLast}
                     placeholder="Last" placeholderTextColor={C.muted} autoCapitalize="words"
                     style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                      fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint }}/>
+                      fontFamily:F.body, padding:10, backgroundColor:C.faint }}/>
                 </View>
               </View>
               <Cap style={{ marginBottom:6 }}>Email</Cap>
@@ -4536,7 +4559,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 placeholder="athlete@email.com" placeholderTextColor={C.muted}
                 autoCapitalize="none" keyboardType="email-address"
                 style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                  fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint, marginBottom:10 }}/>
+                  fontFamily:F.body, padding:10, backgroundColor:C.faint, marginBottom:10 }}/>
               <Cap style={{ marginBottom:6 }}>Assign to Academy</Cap>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:12 }}>
                 <View style={{ flexDirection:'row', gap:6 }}>
@@ -4560,7 +4583,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 style={{ backgroundColor:(!newAthleteEmail.trim()||!newAthleteFirst.trim())?C.faint:C.teal, padding:14, alignItems:'center' }}>
                 {manageLoading
                   ? <ActivityIndicator color={C.offWhite}/>
-                  : <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:C.offWhite }}>Create Account</Txt>}
+                  : <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:2, textTransform:'uppercase', color:C.offWhite }}>Create Account</Txt>}
               </TouchableOpacity>
             </View>
           </View>
@@ -4569,7 +4592,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
             <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
               <View style={{ width:3, height:14, backgroundColor:C.amber, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 3 · Send Invite Email</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 3 · Send Invite Email</Txt>
             </View>
             <View style={{ padding:14 }}>
               <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
@@ -4580,12 +4603,12 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 placeholder="athlete@email.com" placeholderTextColor={C.muted}
                 autoCapitalize="none" keyboardType="email-address"
                 style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                  fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint, marginBottom:12 }}/>
+                  fontFamily:F.body, padding:10, backgroundColor:C.faint, marginBottom:12 }}/>
               <TouchableOpacity onPress={sendInvite} disabled={manageLoading||!inviteEmail.trim()} activeOpacity={0.8}
                 style={{ backgroundColor:!inviteEmail.trim()?C.faint:C.amber, padding:14, alignItems:'center' }}>
                 {manageLoading
                   ? <ActivityIndicator color={C.offWhite}/>
-                  : <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:'#0F0F0D' }}>Send Invite</Txt>}
+                  : <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:2, textTransform:'uppercase', color:'#0F0F0D' }}>Send Invite</Txt>}
               </TouchableOpacity>
             </View>
           </View>
@@ -4603,13 +4626,13 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
             <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
               <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Academies</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Academies</Txt>
             </View>
             <View style={{ padding:14 }}>
               {academies.map(ac=>(
                 <View key={ac.id} style={{ flexDirection:'row', alignItems:'center', paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.faint }}>
                   <View style={{ flex:1 }}>
-                    <Txt style={{ fontSize:13, fontFamily:'Outfit_700Bold', color:C.text }}>{ac.name}</Txt>
+                    <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text }}>{ac.name}</Txt>
                     {ac.location&&<Cap style={{ fontSize:7, marginTop:2 }}>{ac.location}</Cap>}
                     <Cap style={{ fontSize:7, marginTop:2, color:C.muted }}>
                       {athletes.filter(a=>a.academy_id===ac.id).length} athletes
@@ -4624,7 +4647,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                   <TextInput
                     placeholder="Academy name…" placeholderTextColor={C.muted}
                     style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
-                      fontSize:13, fontFamily:'Outfit_400Regular', padding:10, backgroundColor:C.faint }}
+                      fontSize:13, fontFamily:F.body, padding:10, backgroundColor:C.faint }}
                     onSubmitEditing={e=>createAcademy(e.nativeEvent.text)}
                     returnKeyType="done"/>
                 </View>
@@ -4637,7 +4660,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
             <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
               <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Assign Coach Role</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Assign Coach Role</Txt>
             </View>
             <View style={{ padding:14 }}>
               <Cap style={{ marginBottom:8 }}>Select Academy for New Coach</Cap>
@@ -4665,11 +4688,11 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                     marginBottom:6, borderWidth:1, borderColor:C.border, backgroundColor:C.faint }}>
                   <ProfileAvatar name={a.name||'?'} size={28} belt={a.belt||'white'}/>
                   <View style={{ flex:1 }}>
-                    <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:C.text }}>{a.name||'Unnamed'}</Txt>
+                    <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>{a.name||'Unnamed'}</Txt>
                     <BeltBadge belt={a.belt||'white'} stripes={a.stripes||0} size="sm"/>
                   </View>
                   <View style={{ borderWidth:1, borderColor:`${C.teal}55`, paddingHorizontal:8, paddingVertical:4 }}>
-                    <Txt style={{ fontSize:8, color:C.teal, fontFamily:'Outfit_700Bold', letterSpacing:1 }}>Make Coach</Txt>
+                    <Txt style={{ fontSize:8, color:C.teal, fontFamily:F.semi, letterSpacing:1 }}>Make Coach</Txt>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -4685,7 +4708,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                       <View key={u.user_id} style={{ flexDirection:'row', alignItems:'center', gap:8,
                         padding:10, marginBottom:4, borderWidth:1, borderColor:`${C.teal}44`,
                         backgroundColor:`${C.teal}0A` }}>
-                        <Txt style={{ fontSize:12, color:C.teal, fontFamily:'Outfit_700Bold', flex:1 }}>
+                        <Txt style={{ fontSize:12, color:C.teal, fontFamily:F.semi, flex:1 }}>
                           {ath?.name || 'Unknown'}
                         </Txt>
                         {ac && <Cap style={{ color:C.teal, fontSize:7 }}>{ac.name}</Cap>}
@@ -4696,7 +4719,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                           setManageMsg(`✓ ${ath?.name||'User'} changed back to athlete.`);
                         }} activeOpacity={0.75}
                           style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:6, paddingVertical:3 }}>
-                          <Txt style={{ fontSize:8, color:C.red, fontFamily:'Outfit_700Bold' }}>Remove</Txt>
+                          <Txt style={{ fontSize:8, color:C.red, fontFamily:F.semi }}>Remove</Txt>
                         </TouchableOpacity>
                       </View>
                     );
@@ -4718,12 +4741,12 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
             <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
               <View style={{ width:3, height:14, backgroundColor:C.amber, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Athlete → Academy</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Athlete → Academy</Txt>
             </View>
             <View style={{ padding:14 }}>
               {athletes.map(a=>(
                 <View key={a.id} style={{ paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.faint }}>
-                  <Txt style={{ fontSize:12, fontFamily:'Outfit_700Bold', color:C.text, marginBottom:6 }}>{a.name||'Unnamed'}</Txt>
+                  <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text, marginBottom:6 }}>{a.name||'Unnamed'}</Txt>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View style={{ flexDirection:'row', gap:6 }}>
                       <TouchableOpacity onPress={()=>assignToAcademy(a.id, null)} activeOpacity={0.75}
@@ -4788,7 +4811,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                     <View key={ag.id}>
                       <View style={{ paddingHorizontal:12, paddingVertical:6, backgroundColor:C.goldDim,
                         borderBottomWidth:1, borderBottomColor:C.border }}>
-                        <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1.5,
+                        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5,
                           textTransform:'uppercase', color:C.gold }}>{ag.name}</Txt>
                         <Cap style={{ fontSize:6 }}>{ag.athletes.length} athlete{ag.athletes.length!==1?'s':''}</Cap>
                       </View>
@@ -4801,7 +4824,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                     <View>
                       <View style={{ paddingHorizontal:12, paddingVertical:6, backgroundColor:C.faint,
                         borderBottomWidth:1, borderBottomColor:C.border }}>
-                        <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:1.5,
+                        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5,
                           textTransform:'uppercase', color:C.muted }}>Unassigned</Txt>
                       </View>
                       {unassigned.map(a=>(
@@ -4833,11 +4856,11 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 <ProfileAvatar name={sel?.name||'?'} size={44} belt={sel?.belt||'white'}/>
                 <View style={{ flex:1 }}>
                   <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:2 }}>
-                    <Txt style={{ fontSize:15, fontFamily:'Outfit_800ExtraBold', color:C.text }}>{sel?.name||'Unnamed'}</Txt>
+                    <Txt style={{ fontSize:15, fontFamily:F.bold, color:C.text }}>{sel?.name||'Unnamed'}</Txt>
                     {allUsers.find(u=>u.user_id===sel?.user_id)?.role==='coach' && (
                       <View style={{ borderWidth:1, borderColor:`${C.teal}55`, backgroundColor:`${C.teal}15`,
                         paddingHorizontal:6, paddingVertical:2 }}>
-                        <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', color:C.teal, letterSpacing:1 }}>COACH</Txt>
+                        <Txt style={{ fontSize:8, fontFamily:F.semi, color:C.teal, letterSpacing:1 }}>COACH</Txt>
                       </View>
                     )}
                   </View>
@@ -4862,7 +4885,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                               style={{ paddingHorizontal:6, paddingVertical:3, borderWidth:1,
                                 borderColor:sel?.belt===b?C.gold:C.border,
                                 backgroundColor:sel?.belt===b?BELT_COLORS[b].bg:'transparent' }}>
-                              <Txt style={{ fontSize:7, fontFamily:'Outfit_700Bold',
+                              <Txt style={{ fontSize:7, fontFamily:F.semi,
                                 color:sel?.belt===b?BELT_COLORS[b].text:C.muted, textTransform:'capitalize' }}>
                                 {BELT_COLORS[b].label}
                               </Txt>
@@ -4880,7 +4903,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                             style={{ paddingHorizontal:8, paddingVertical:4, borderWidth:1,
                               borderColor:sel?.belt===b?C.gold:C.border,
                               backgroundColor:sel?.belt===b?BELT_COLORS[b].bg:'transparent' }}>
-                            <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold',
+                            <Txt style={{ fontSize:8, fontFamily:F.semi,
                               color:sel?.belt===b?BELT_COLORS[b].text:C.muted, textTransform:'capitalize' }}>
                               {BELT_COLORS[b].label}
                             </Txt>
@@ -4910,7 +4933,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                   style={{ borderWidth:1, borderColor:`${C.gold}66`, backgroundColor:C.goldDim,
                     paddingHorizontal:10, paddingVertical:8, alignItems:'center' }}>
                   <Txt style={{ fontSize:14, marginBottom:2 }}>📋</Txt>
-                  <Txt style={{ fontSize:7, fontFamily:'Outfit_700Bold', letterSpacing:1,
+                  <Txt style={{ fontSize:7, fontFamily:F.semi, letterSpacing:1,
                     textTransform:'uppercase', color:C.gold }}>Log Session</Txt>
                 </TouchableOpacity>
               </View>
@@ -4927,7 +4950,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 ].map(({label,value,color})=>(
                   <View key={label} style={{ flex:1, minWidth:70, borderWidth:1, borderColor:C.border,
                     backgroundColor:C.card, padding:10, alignItems:'center' }}>
-                    <Txt style={{ fontSize:16, fontFamily:'Outfit_900Black', color, lineHeight:20 }}>{value}</Txt>
+                    <Txt style={{ fontSize:16, fontFamily:F.display, color, lineHeight:20 }}>{value}</Txt>
                     <Cap style={{ fontSize:6, textAlign:'center', marginTop:3 }}>{label}</Cap>
                   </View>
                 ))}
@@ -4937,7 +4960,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
               <View style={{ borderWidth:1, borderColor:C.border, marginBottom:12 }}>
                 <View style={{ flexDirection:'row', alignItems:'center', padding:12, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
                   <View style={{ width:3, height:12, backgroundColor:C.gold, marginRight:8 }}/>
-                  <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Recent Rolls</Txt>
+                  <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Recent Rolls</Txt>
                 </View>
                 <View style={{ padding:12 }}>
                   {selRolls.length===0 && <Cap style={{ textAlign:'center', paddingVertical:8 }}>No rolls recorded</Cap>}
@@ -4953,10 +4976,10 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                           <Txt style={{ fontSize:11, color:C.text }}>{r.partner||'Open Mat'}</Txt>
                           <Cap style={{ fontSize:7, marginTop:1 }}>{r.startedAt?new Date(r.startedAt).toLocaleDateString():''}</Cap>
                         </View>
-                        {r.endType==='submission'&&<View style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:4, paddingVertical:1, marginRight:6 }}><Txt style={{ fontSize:7, color:C.red, fontFamily:'Outfit_700Bold' }}>🔒</Txt></View>}
-                        <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:C.gold, marginRight:6 }}>{my}–{op}</Txt>
+                        {r.endType==='submission'&&<View style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:4, paddingVertical:1, marginRight:6 }}><Txt style={{ fontSize:7, color:C.red, fontFamily:F.semi }}>🔒</Txt></View>}
+                        <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.gold, marginRight:6 }}>{my}–{op}</Txt>
                         <View style={{ borderWidth:1, borderColor:`${rc}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                          <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', color:rc }}>{res==='win'?'W':res==='loss'?'L':'D'}</Txt>
+                          <Txt style={{ fontSize:8, fontFamily:F.semi, color:rc }}>{res==='win'?'W':res==='loss'?'L':'D'}</Txt>
                         </View>
                       </View>
                     );
@@ -4969,7 +4992,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 <View style={{ borderWidth:1, borderColor:C.border, marginBottom:12 }}>
                   <View style={{ flexDirection:'row', alignItems:'center', padding:12, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
                     <View style={{ width:3, height:12, backgroundColor:C.teal, marginRight:8 }}/>
-                    <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Competitions</Txt>
+                    <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Competitions</Txt>
                   </View>
                   <View style={{ padding:12 }}>
                     {selComps.map((c,i)=>{
@@ -4978,13 +5001,13 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                       return(
                         <View key={c.id} style={{ paddingVertical:7, borderBottomWidth:i<selComps.length-1?1:0, borderBottomColor:C.faint }}>
                           <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
-                            <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:C.text, flex:1 }} numberOfLines={1}>{c.name}</Txt>
+                            <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.text, flex:1 }} numberOfLines={1}>{c.name}</Txt>
                             <View style={{ flexDirection:'row', gap:4 }}>
                               <View style={{ borderWidth:1, borderColor:`${C.sage}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                                <Txt style={{ fontSize:8, color:C.sage, fontFamily:'Outfit_700Bold' }}>{cW}W</Txt>
+                                <Txt style={{ fontSize:8, color:C.sage, fontFamily:F.semi }}>{cW}W</Txt>
                               </View>
                               <View style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                                <Txt style={{ fontSize:8, color:C.red, fontFamily:'Outfit_700Bold' }}>{cL}L</Txt>
+                                <Txt style={{ fontSize:8, color:C.red, fontFamily:F.semi }}>{cL}L</Txt>
                               </View>
                             </View>
                           </View>
@@ -5003,11 +5026,11 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                   <View style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, marginBottom:12 }}>
                     <View style={{ flexDirection:'row', alignItems:'center', padding:12, borderBottomWidth:1, borderBottomColor:`${C.gold}33` }}>
                       <Txt style={{ fontSize:13, marginRight:8 }}>💡</Txt>
-                      <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2, textTransform:'uppercase', color:C.gold }}>Performance Insights</Txt>
+                      <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.gold }}>Performance Insights</Txt>
                     </View>
                     {ins.slice(0,3).map((ins2,i)=>(
                       <View key={i} style={{ padding:12, borderBottomWidth:i<2?1:0, borderBottomColor:`${C.gold}22` }}>
-                        <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold', color:ins2.color, marginBottom:2 }}>{ins2.icon} {ins2.title}</Txt>
+                        <Txt style={{ fontSize:10, fontFamily:F.semi, color:ins2.color, marginBottom:2 }}>{ins2.icon} {ins2.title}</Txt>
                         <Txt style={{ fontSize:11, color:C.text, lineHeight:16 }}>{ins2.text}</Txt>
                       </View>
                     ))}
@@ -5100,8 +5123,8 @@ function AuthScreen({ onAuth }) {
           {/* Logo + wordmark */}
           <GSLLogo size={80}/>
           <View style={{ width:40, height:2, backgroundColor:C.gold, marginTop:20, marginBottom:8 }}/>
-          <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:3, textTransform:'uppercase', color:C.text, marginBottom:2 }}>Grounded</Txt>
-          <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:3, textTransform:'uppercase', color:C.gold, marginBottom:40 }}>Skills Lab</Txt>
+          <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.text, marginBottom:2 }}>Grounded</Txt>
+          <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.gold, marginBottom:40 }}>Skills Lab</Txt>
 
           {/* Form */}
           <View style={{ width:'100%', maxWidth:380 }}>
@@ -5116,7 +5139,7 @@ function AuthScreen({ onAuth }) {
                     placeholder="First" placeholderTextColor={C.muted}
                     autoCapitalize="words" returnKeyType="next"
                     style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:15,
-                      fontFamily:'Outfit_400Regular', padding:14, backgroundColor:C.card }}/>
+                      fontFamily:F.body, padding:14, backgroundColor:C.card }}/>
                 </View>
                 <View style={{ flex:1 }}>
                   <Cap style={{ marginBottom:6 }}>Last Name</Cap>
@@ -5125,7 +5148,7 @@ function AuthScreen({ onAuth }) {
                     placeholder="Last" placeholderTextColor={C.muted}
                     autoCapitalize="words" returnKeyType="next"
                     style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:15,
-                      fontFamily:'Outfit_400Regular', padding:14, backgroundColor:C.card }}/>
+                      fontFamily:F.body, padding:14, backgroundColor:C.card }}/>
                 </View>
               </View>
             )}
@@ -5136,7 +5159,7 @@ function AuthScreen({ onAuth }) {
               placeholder="your@email.com" placeholderTextColor={C.muted}
               autoCapitalize="none" keyboardType="email-address" returnKeyType="next"
               style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:15,
-                fontFamily:'Outfit_400Regular', padding:14, marginBottom:16, backgroundColor:C.card }}/>
+                fontFamily:F.body, padding:14, marginBottom:16, backgroundColor:C.card }}/>
 
             <Cap style={{ marginBottom:6 }}>Password</Cap>
             <TextInput
@@ -5144,7 +5167,7 @@ function AuthScreen({ onAuth }) {
               placeholder="••••••••" placeholderTextColor={C.muted}
               secureTextEntry returnKeyType="done" onSubmitEditing={submit}
               style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:15,
-                fontFamily:'Outfit_400Regular', padding:14, marginBottom:24, backgroundColor:C.card }}/>
+                fontFamily:F.body, padding:14, marginBottom:24, backgroundColor:C.card }}/>
 
             {error ? (
               <View style={{ borderWidth:1,
@@ -5159,7 +5182,7 @@ function AuthScreen({ onAuth }) {
               style={{ backgroundColor:!canSubmit?C.faint:C.gold, padding:16, alignItems:'center', marginBottom:16 }}>
               {loading
                 ? <ActivityIndicator color="#0F0F0D"/>
-                : <Txt style={{ fontSize:10, fontFamily:'Outfit_900Black', letterSpacing:3, textTransform:'uppercase', color:'#0F0F0D' }}>
+                : <Txt style={{ fontSize:10, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:'#0F0F0D' }}>
                     {mode==='login'?'Sign In':'Create Account'}
                   </Txt>}
             </TouchableOpacity>
@@ -5167,7 +5190,7 @@ function AuthScreen({ onAuth }) {
             <TouchableOpacity onPress={()=>{ setMode(m=>m==='login'?'signup':'login'); setError(''); }} activeOpacity={0.7} style={{ alignItems:'center' }}>
               <Txt style={{ fontSize:12, color:C.muted }}>
                 {mode==='login'?'No account? ':'Already have an account? '}
-                <Txt style={{ color:C.gold, fontFamily:'Outfit_700Bold' }}>{mode==='login'?'Sign up':'Sign in'}</Txt>
+                <Txt style={{ color:C.gold, fontFamily:F.semi }}>{mode==='login'?'Sign up':'Sign in'}</Txt>
               </Txt>
             </TouchableOpacity>
           </View>
@@ -5281,11 +5304,11 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
       if (NativeModules.Orientation) NativeModules.Orientation.lockToPortrait?.();
     } catch (_) {}
     Font.loadAsync({
-      'Outfit_400Regular':   { uri: 'https://fonts.gstatic.com/s/outfit/v11/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1C4G-EiAou6Y.woff2' },
-      'Outfit_600SemiBold':  { uri: 'https://fonts.gstatic.com/s/outfit/v11/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1C4G-EiAou6Y.woff2' },
-      'Outfit_700Bold':      { uri: 'https://fonts.gstatic.com/s/outfit/v11/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1C4G-EiAou6Y.woff2' },
-      'Outfit_800ExtraBold': { uri: 'https://fonts.gstatic.com/s/outfit/v11/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1C4G-EiAou6Y.woff2' },
-      'Outfit_900Black':     { uri: 'https://fonts.gstatic.com/s/outfit/v11/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1C4G-EiAou6Y.woff2' },
+      'Inter_400Regular':    { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2' },
+      'Inter_500Medium':     { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZ9hiJ-Ek-_EeA.woff2' },
+      'Inter_600SemiBold':   { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYAZ9hiJ-Ek-_EeA.woff2' },
+      'Inter_700Bold':       { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYAZ9hiJ-Ek-_EeA.woff2' },
+      'DMSerifDisplay_400Regular': { uri: 'https://fonts.gstatic.com/s/dmserifdisplay/v15/-nFnOHM81r4j6k0gjALR8uVua8QHJbkn_E3OSQ.woff2' },
     }).then(() => setFontsLoaded(true)).catch(() => setFontsLoaded(true));
   }, []);
 
@@ -5537,12 +5560,12 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
       {impersonatedAthlete && (
         <View style={{ backgroundColor:C.teal, paddingHorizontal:16, paddingVertical:8,
           flexDirection:'row', alignItems:'center', gap:10 }}>
-          <Txt style={{ fontSize:11, fontFamily:'Outfit_700Bold', color:'#fff', flex:1 }}>
+          <Txt style={{ fontSize:11, fontFamily:F.semi, color:'#fff', flex:1 }}>
             📋 Logging for {impersonatedAthlete.name}
           </Txt>
           <TouchableOpacity onPress={onStopImpersonating} activeOpacity={0.75}
             style={{ borderWidth:1, borderColor:'rgba(255,255,255,0.5)', paddingHorizontal:10, paddingVertical:4 }}>
-            <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', color:'#fff', letterSpacing:1.5, textTransform:'uppercase' }}>
+            <Txt style={{ fontSize:9, fontFamily:F.semi, color:'#fff', letterSpacing:1.5, textTransform:'uppercase' }}>
               ← Back to Dashboard
             </Txt>
           </TouchableOpacity>
@@ -5559,18 +5582,18 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
             {/* Logo */}
             <GSLLogo size={30}/>
             {/* Wordmark */}
-            <View>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:C.text, lineHeight:11 }}>Grounded</Txt>
-              <Txt style={{ fontSize:9, fontFamily:'Outfit_900Black', letterSpacing:2, textTransform:'uppercase', color:C.gold, lineHeight:11 }}>Skills Lab</Txt>
+            <View style={{ marginLeft:2 }}>
+              <Txt style={{ fontSize:12, fontFamily:F.semi, letterSpacing:0.5, color:C.gold, lineHeight:15 }}>Grounded Skills Lab</Txt>
+              <Txt style={{ fontSize:9, fontFamily:F.body, color:C.muted, lineHeight:12 }}>BJJ Analytics</Txt>
             </View>
             {/* Spacer */}
             <View style={{ flex:1 }}/>
             {/* Live score — only when rolling */}
             {activeRoll ? (
               <View style={{ flexDirection:'row', alignItems:'center', gap:4 }}>
-                <Txt style={{ fontSize:15, fontFamily:'Outfit_900Black', color:C.gold }}>{livePts}</Txt>
+                <Txt style={{ fontSize:15, fontFamily:F.display, color:C.gold }}>{livePts}</Txt>
                 <Cap style={{ fontSize:7 }}>–</Cap>
-                <Txt style={{ fontSize:15, fontFamily:'Outfit_900Black', color:C.stone }}>{liveOppPts}</Txt>
+                <Txt style={{ fontSize:15, fontFamily:F.display, color:C.stone }}>{liveOppPts}</Txt>
               </View>
             ) : null}
             {/* Theme toggle */}
@@ -5582,7 +5605,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
             {isCoach && onSwitchToCoach && (
               <TouchableOpacity onPress={onSwitchToCoach} activeOpacity={0.75}
                 style={{ borderWidth:1, borderColor:`${C.teal}66`, backgroundColor:`${C.teal}15`, paddingHorizontal:8, paddingVertical:5 }}>
-                <Txt style={{ fontSize:8, fontFamily:'Outfit_700Bold', letterSpacing:1, textTransform:'uppercase', color:C.teal }}>Coach</Txt>
+                <Txt style={{ fontSize:8, fontFamily:F.semi, letterSpacing:1, textTransform:'uppercase', color:C.teal }}>Coach</Txt>
               </TouchableOpacity>
             )}
             {/* Sign out */}
@@ -5599,7 +5622,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
               paddingVertical:6, marginBottom:8 }}>
             <ProfileAvatar name={activeProfile?.name||'?'} size={22} belt={activeProfile?.belt||'white'}/>
             <View style={{ flex:1 }}>
-              <Txt style={{ fontSize:11, fontFamily:'Outfit_800ExtraBold', lineHeight:14 }} numberOfLines={1}>{activeProfile?.name||'Set up profile'}</Txt>
+              <Txt style={{ fontSize:11, fontFamily:F.bold, lineHeight:14 }} numberOfLines={1}>{activeProfile?.name||'Set up profile'}</Txt>
               <BeltBadge belt={activeProfile?.belt||'white'} stripes={activeProfile?.stripes||0} size="sm"/>
             </View>
             <Txt style={{ fontSize:10, color:C.muted }}>▾</Txt>
@@ -5615,11 +5638,15 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           )}
 
           {/* Nav tabs */}
-          <View style={{ flexDirection:'row' }}>
-            {TABS.map(t => (
-              <TouchableOpacity key={t} onPress={()=>setTab(t)} activeOpacity={0.75}
-                style={{ flex:1, paddingVertical:10, alignItems:'center', borderTopWidth:2, borderTopColor:tab===t?C.gold:'transparent' }}>
-                <Txt style={{ fontSize:8, fontFamily:tab===t?'Outfit_700Bold':'Outfit_400Regular', letterSpacing:1.2, textTransform:'uppercase', color:tab===t?C.gold:C.muted }}>{t}</Txt>
+          <View style={{ flexDirection:'row', backgroundColor:C.surface, borderTopWidth:1, borderTopColor:C.border }}>
+            {TABS.map(({ key, label, icon }) => (
+              <TouchableOpacity key={key} onPress={()=>setTab(key)} activeOpacity={0.75}
+                style={{ flex:1, paddingVertical:9, alignItems:'center',
+                  borderTopWidth:2, borderTopColor:tab===key?C.gold:'transparent',
+                  backgroundColor:tab===key?C.goldDim:'transparent' }}>
+                <Text style={{ fontSize:18, lineHeight:22 }}>{icon}</Text>
+                <Text style={{ fontSize:9, fontFamily:tab===key?F.semi:F.body,
+                  letterSpacing:0.5, color:tab===key?C.gold:C.muted, marginTop:2 }}>{label}</Text>
               </TouchableOpacity>
             ))}
           </View>
