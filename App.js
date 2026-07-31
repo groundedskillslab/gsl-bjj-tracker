@@ -289,7 +289,8 @@ const db = {
     return data || [];
   },
   async upsertJournalEntry(entry) {
-    if (entry.id) {
+    if (entry.isEdit) {
+      // Editing an existing entry
       const { error } = await supabase.from('journal_entries').update({
         date: entry.date, session_type: entry.sessionType,
         techniques: entry.techniques, notes: entry.notes,
@@ -297,8 +298,9 @@ const db = {
       }).eq('id', entry.id);
       if (error) console.error('journal update error:', error.message);
     } else {
+      // New entry — always insert
       const { error } = await supabase.from('journal_entries').insert({
-        id: uid(), athlete_id: entry.athleteId,
+        id: entry.id, athlete_id: entry.athleteId,
         date: entry.date, session_type: entry.sessionType,
         techniques: entry.techniques, notes: entry.notes,
       });
@@ -2430,8 +2432,9 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
       athleteId: athlete?.id,
       date, sessionType, notes: sessionNotes,
       techniques: validTechs,
+      isEdit: !!editingEntry,
     };
-    await db.upsertJournalEntry(entry).catch(console.error);
+    await db.upsertJournalEntry(entry).catch(e => console.error('journal save failed:', e.message));
     setJournal(prev => {
       const without = prev.filter(e => e.id !== entry.id);
       return [entry, ...without].sort((a,b)=>b.date.localeCompare(a.date));
