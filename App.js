@@ -2448,10 +2448,18 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
     setSessionNotes(entry.notes || '');
   };
 
+  const [saveStatus, setSaveStatus] = useState(''); // '' | 'saving' | 'saved' | 'error'
+
   const saveEntry = async () => {
     const validTechs = techniques.filter(t => t.name.trim());
     if (!validTechs.length) return;
-    setSaving(true);
+    if (!athlete?.id) {
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(''), 3000);
+      console.error('journal save: no athlete id');
+      return;
+    }
+    setSaving(true); setSaveStatus('saving');
     const entry = {
       id: editingEntry?.id || uid(),
       athleteId: athlete?.id,
@@ -2459,12 +2467,20 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
       techniques: validTechs,
       isEdit: !!editingEntry,
     };
-    await db.upsertJournalEntry(entry).catch(e => console.error('journal save failed:', e.message));
-    setJournal(prev => {
-      const without = prev.filter(e => e.id !== entry.id);
-      return [entry, ...without].sort((a,b)=>b.date.localeCompare(a.date));
-    });
-    resetForm();
+    try {
+      await db.upsertJournalEntry(entry);
+      setJournal(prev => {
+        const without = prev.filter(e => e.id !== entry.id);
+        return [entry, ...without].sort((a,b)=>b.date.localeCompare(a.date));
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(''), 2000);
+      resetForm();
+    } catch(e) {
+      console.error('journal save failed:', e.message);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(''), 4000);
+    }
     setSaving(false);
   };
 
@@ -2644,13 +2660,14 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
 
           <TouchableOpacity onPress={saveEntry} disabled={saving||!techniques.some(t=>t.name.trim())}
             activeOpacity={0.8}
-            style={{ backgroundColor:techniques.some(t=>t.name.trim())?C.gold:C.faint,
-              padding:14, alignItems:'center' }}>
+            style={{ backgroundColor:techniques.some(t=>t.name.trim())?
+              saveStatus==='error'?C.red:C.gold :C.faint,
+              padding:14, alignItems:'center', borderRadius:6 }}>
             {saving
               ? <ActivityIndicator color="#0F0F0D"/>
-              : <Txt style={{ fontSize:10, fontFamily:F.display, letterSpacing:2,
-                  textTransform:'uppercase', color:'#0F0F0D' }}>
-                  {editingEntry ? 'Save changes' : 'Save session'}
+              : <Txt style={{ fontSize:11, fontFamily:F.semi, letterSpacing:1,
+                  textTransform:'uppercase', color:saveStatus==='error'?'#fff':'#0F0F0D' }}>
+                  {saveStatus==='saved'?'✓ Saved':saveStatus==='error'?'Failed — check connection':editingEntry?'Save changes':'Save session'}
                 </Txt>}
           </TouchableOpacity>
         </View>
