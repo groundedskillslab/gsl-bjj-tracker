@@ -2378,6 +2378,8 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
   const [sessionNotes, setSessionNotes] = useState('');
   const [saving,       setSaving]       = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
+  const [viewMode,     setViewMode]     = useState('entries'); // 'entries' | 'techniques'
+  const [techSearch,   setTechSearch]   = useState('');
 
   // Derived stats
   const allTechs = journal.flatMap(e => e.techniques || []);
@@ -2677,8 +2679,23 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
         </View>
       )}
 
-      {/* Entry list */}
+      {/* View mode toggle */}
       {journal.length > 0 && (
+        <View style={{ flexDirection:'row', gap:6, marginBottom:16 }}>
+          {[['entries','📅 By Date'],['techniques','📚 By Technique']].map(([key,label])=>(
+            <TouchableOpacity key={key} onPress={()=>setViewMode(key)} activeOpacity={0.75}
+              style={{ flex:1, paddingVertical:10, borderWidth:1, alignItems:'center',
+                borderColor:viewMode===key?C.gold:C.border,
+                backgroundColor:viewMode===key?C.goldDim:'transparent' }}>
+              <Txt style={{ fontSize:11, fontFamily:viewMode===key?'Outfit_700Bold':'Outfit_400Regular',
+                color:viewMode===key?C.gold:C.muted }}>{label}</Txt>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* ── BY DATE VIEW ── */}
+      {journal.length > 0 && viewMode === 'entries' && (
         <View>
           <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
             <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
@@ -2713,8 +2730,8 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
                         <View key={i} style={{ flexDirection:'row', alignItems:'center', gap:4,
                           paddingHorizontal:8, paddingVertical:4, borderWidth:1,
                           borderColor:o.color+'55', backgroundColor:o.bg }}>
-                          <Txt style={{ fontSize:10, fontFamily:'Outfit_700Bold', color:o.color }}>
-                            {o.label === 'Learned' ? '📖' : o.label === 'Tried' ? '⚡' : '✅'}
+                          <Txt style={{ fontSize:10, color:o.color }}>
+                            {o.label==='Learned'?'📖':o.label==='Tried'?'⚡':'✅'}
                           </Txt>
                           <Txt style={{ fontSize:11, color:o.color, fontFamily:'Outfit_600SemiBold' }}>{t.name}</Txt>
                         </View>
@@ -2732,6 +2749,123 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
           })}
         </View>
       )}
+
+      {/* ── BY TECHNIQUE VIEW ── */}
+      {journal.length > 0 && viewMode === 'techniques' && (()=>{
+        // Build technique index: { name -> [{date, sessionType, outcome, note, sessionNote}] }
+        const techIndex = {};
+        journal.forEach(entry => {
+          (entry.techniques||[]).forEach(t => {
+            if (!t.name?.trim()) return;
+            if (!techIndex[t.name]) techIndex[t.name] = [];
+            techIndex[t.name].push({
+              date: entry.date,
+              sessionType: entry.sessionType,
+              outcome: t.outcome,
+              techNote: t.notes || '',
+              sessionNote: entry.notes || '',
+            });
+          });
+        });
+
+        // Sort techniques by most recently logged
+        const sorted = Object.entries(techIndex)
+          .sort((a,b) => b[1][0].date.localeCompare(a[1][0].date));
+
+        return (
+          <View>
+            <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
+              <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
+              <Txt style={{ fontSize:9, fontFamily:'Outfit_700Bold', letterSpacing:2,
+                textTransform:'uppercase', color:C.textDim }}>
+                {sorted.length} technique{sorted.length!==1?'s':''} logged
+              </Txt>
+            </View>
+
+            {/* Search filter */}
+            <TextInput
+              value={techSearch} onChangeText={setTechSearch}
+              placeholder="Search techniques…" placeholderTextColor={C.muted}
+              style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                fontFamily:'Outfit_400Regular', padding:10, marginBottom:12, backgroundColor:C.faint }}/>
+
+            {sorted
+              .filter(([name])=>!techSearch.trim()||name.toLowerCase().includes(techSearch.toLowerCase()))
+              .map(([name, appearances]) => {
+                const learned   = appearances.filter(a=>a.outcome==='learned').length;
+                const attempted = appearances.filter(a=>a.outcome==='attempted').length;
+                const finished  = appearances.filter(a=>a.outcome==='finished').length;
+                const finishRate = attempted+finished>0 ? Math.round((finished/(attempted+finished))*100) : null;
+                const rc = finishRate===null?C.muted:finishRate>=70?C.sage:finishRate>=40?C.amber:C.red;
+                const allNotes = appearances
+                  .filter(a=>a.techNote||a.sessionNote)
+                  .map(a=>({ date:a.date, note:a.techNote||a.sessionNote, sessionType:a.sessionType }));
+
+                return (
+                  <View key={name} style={{ borderWidth:1, borderColor:C.border,
+                    backgroundColor:C.card, marginBottom:10 }}>
+                    {/* Technique header */}
+                    <View style={{ padding:14, borderBottomWidth:1, borderBottomColor:C.faint,
+                      backgroundColor:C.faint, flexDirection:'row', alignItems:'center' }}>
+                      <View style={{ flex:1 }}>
+                        <Txt style={{ fontSize:13, fontFamily:'Outfit_800ExtraBold', color:C.text }}>{name}</Txt>
+                        <Cap style={{ marginTop:2 }}>
+                          {appearances.length} appearance{appearances.length!==1?'s':''} · first logged {appearances[appearances.length-1].date}
+                        </Cap>
+                      </View>
+                      {finishRate !== null && (
+                        <View style={{ borderWidth:1, borderColor:`${rc}44`, backgroundColor:`${rc}15`,
+                          paddingHorizontal:10, paddingVertical:6, alignItems:'center' }}>
+                          <Txt style={{ fontSize:14, fontFamily:'Outfit_900Black', color:rc }}>{finishRate}%</Txt>
+                          <Cap style={{ fontSize:6, color:rc }}>finish rate</Cap>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Outcome summary */}
+                    <View style={{ flexDirection:'row', padding:12, gap:8, borderBottomWidth:allNotes.length?1:0,
+                      borderBottomColor:C.faint }}>
+                      {[
+                        {label:'Drilled', value:learned,   color:'#1D9E75', bg:'#E1F5EE', icon:'📖'},
+                        {label:'Tried',   value:attempted, color:'#BA7517', bg:'#FAEEDA', icon:'⚡'},
+                        {label:'Finished',value:finished,  color:'#993C1D', bg:'#FAECE7', icon:'✅'},
+                      ].map(({label,value,color,bg,icon})=>(
+                        <View key={label} style={{ flex:1, borderWidth:1, borderColor:`${color}33`,
+                          backgroundColor:bg, padding:8, alignItems:'center' }}>
+                          <Txt style={{ fontSize:9 }}>{icon}</Txt>
+                          <Txt style={{ fontSize:16, fontFamily:'Outfit_900Black', color, lineHeight:22 }}>{value}</Txt>
+                          <Cap style={{ fontSize:7, color }}>{label}</Cap>
+                        </View>
+                      ))}
+                    </View>
+
+                    {/* Notes timeline */}
+                    {allNotes.length > 0 && (
+                      <View style={{ padding:12 }}>
+                        <Cap style={{ marginBottom:8, color:C.muted }}>Notes</Cap>
+                        {allNotes.map((n,i)=>{
+                          const st = SESSION_TYPES.find(s=>s.key===n.sessionType)||SESSION_TYPES[0];
+                          return (
+                            <View key={i} style={{ flexDirection:'row', gap:10, marginBottom:10,
+                              paddingBottom:10, borderBottomWidth:i<allNotes.length-1?1:0,
+                              borderBottomColor:C.faint }}>
+                              <View style={{ alignItems:'center', paddingTop:2 }}>
+                                <Txt style={{ fontSize:13 }}>{st.icon}</Txt>
+                                <Cap style={{ fontSize:7, marginTop:2, textAlign:'center' }}>{n.date}</Cap>
+                              </View>
+                              <Txt style={{ flex:1, fontSize:12, color:C.textDim,
+                                fontStyle:'italic', lineHeight:18 }}>"{n.note}"</Txt>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+          </View>
+        );
+      })()}
 
       {journal.length === 0 && (
         <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card,
