@@ -5068,16 +5068,11 @@ export default function App() {
   }, []);
 
   const fetchRole = async userId => {
-    const { data, error } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .single();
-    console.log('fetchRole:', userId, 'data:', JSON.stringify(data), 'error:', error?.message);
+    const { data } = await supabase
+      .from('user_roles').select('role').eq('user_id', userId).single();
     setUserRole(data?.role || 'athlete');
   };
 
-  // All early returns AFTER all hooks
   if (!authReady || (session && userRole === null)) return (
     <View style={{ flex:1, backgroundColor:C.bg, alignItems:'center', justifyContent:'center' }}>
       <StatusBar barStyle="light-content"/>
@@ -5087,31 +5082,40 @@ export default function App() {
 
   if (!session) return <AuthScreen onAuth={setSession}/>;
 
-  if (userRole === 'admin' || userRole === 'coach') {
-    if (impersonating) return (
-      <AppMain
-        session={session}
-        impersonatedAthlete={impersonating}
-        onStopImpersonating={()=>setImpersonating(null)}
-        onSwitchToCoach={()=>{ setImpersonating(null); setCoachMode(true); }}
-        isCoach/>
+  const isCoachOrAdmin = userRole === 'admin' || userRole === 'coach';
+
+  // ── Keep AppMain always mounted for coach/admin so state persists ──────────
+  // We show/hide using display:none equivalent (View with display style on web,
+  // or just conditional rendering on native since native doesn't remount on hide)
+  if (isCoachOrAdmin) {
+    return (
+      <View style={{ flex:1 }}>
+        {/* Coach dashboard — shown when coachMode and not impersonating */}
+        {coachMode && !impersonating && (
+          <CoachDashboard
+            session={session} userRole={userRole}
+            onSwitchToAthlete={()=>setCoachMode(false)}
+            onLogForAthlete={ath=>setImpersonating({
+              id: ath.id, name: ath.name,
+              belt: ath.belt||'white', stripes: ath.stripes||0,
+              gym: ath.gym||'', user_id: ath.user_id, academy_id: ath.academy_id,
+            })}/>
+        )}
+
+        {/* AppMain — kept mounted, hidden behind coach dashboard using display */}
+        <View style={{
+          flex: coachMode && !impersonating ? 0 : 1,
+          display: coachMode && !impersonating ? 'none' : 'flex',
+        }}>
+          <AppMain
+            session={session}
+            onSwitchToCoach={()=>{ setImpersonating(null); setCoachMode(true); }}
+            isCoach
+            impersonatedAthlete={impersonating}
+            onStopImpersonating={()=>setImpersonating(null)}/>
+        </View>
+      </View>
     );
-    if (coachMode) return (
-      <CoachDashboard
-        session={session} userRole={userRole}
-        onSwitchToAthlete={()=>setCoachMode(false)}
-        onLogForAthlete={ath => setImpersonating({
-          // Ensure consistent shape whether from DB or app state
-          id:         ath.id,
-          name:       ath.name,
-          belt:       ath.belt || 'white',
-          stripes:    ath.stripes || 0,
-          gym:        ath.gym || '',
-          user_id:    ath.user_id,
-          academy_id: ath.academy_id,
-        })}/>
-    );
-    return <AppMain session={session} onSwitchToCoach={()=>setCoachMode(true)} isCoach/>;
   }
 
   return <AppMain session={session}/>;
