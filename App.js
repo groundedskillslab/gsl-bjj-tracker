@@ -4395,11 +4395,20 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
     try {
       const academyId = academies.find(a => a.name === newCoachAcademy || a.id === newCoachAcademy)?.id || null;
 
-      await supabase.from('user_roles').upsert({
-        user_id: athleteUserId,
-        role: 'coach',
-        academy_id: academyId,
-      });
+      // Try update first, then insert if no row exists
+      const { data: existing } = await supabase
+        .from('user_roles').select('id').eq('user_id', athleteUserId).maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase.from('user_roles')
+          .update({ role: 'coach', academy_id: academyId })
+          .eq('user_id', athleteUserId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('user_roles')
+          .insert({ user_id: athleteUserId, role: 'coach', academy_id: academyId });
+        if (error) throw error;
+      }
 
       if (academyId) {
         await supabase.from('athletes').update({ academy_id: academyId }).eq('user_id', athleteUserId);
@@ -4730,7 +4739,9 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                         </Txt>
                         {ac && <Cap style={{ color:C.teal, fontSize:7 }}>{ac.name}</Cap>}
                         <TouchableOpacity onPress={async ()=>{
-                          await supabase.from('user_roles').upsert({ user_id: u.user_id, role:'athlete', academy_id: u.academy_id });
+                          await supabase.from('user_roles')
+                            .update({ role:'athlete' })
+                            .eq('user_id', u.user_id);
                           const { data: users } = await supabase.from('user_roles').select('user_id, role, academy_id');
                           setAllUsers(users||[]);
                           setManageMsg(`✓ ${ath?.name||'User'} changed back to athlete.`);
