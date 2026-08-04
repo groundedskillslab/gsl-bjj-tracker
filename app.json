@@ -25,7 +25,14 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "name": "Grounded Skills Lab",
+      "shortName": "GSL BJJ",
+      "description": "BJJ analytics and training tracker",
+      "themeColor": "#C8A24D",
+      "backgroundColor": "#0D0D0B",
+      "display": "standalone",
+      "orientation": "portrait"
     },
     "plugins": [
       "expo-font"
