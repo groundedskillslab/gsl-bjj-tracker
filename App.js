@@ -2590,7 +2590,6 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
       </TouchableOpacity>
     );
   };
-  };
 
   return (
     <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }} keyboardShouldPersistTaps="always">
