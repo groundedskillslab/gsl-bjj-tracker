@@ -1778,7 +1778,16 @@ function ProfileEditModal({ initial, onSave, onCancel }) {
   const [belt,    setBelt]    = useState(initial?.belt||'white');
   const [stripes, setStripes] = useState(initial?.stripes||0);
   const [gym,     setGym]     = useState(initial?.gym||'');
-  const save = () => { if(!name.trim()) return; onSave({ ...(initial||{}), id:initial?.id||uid(), name:name.trim(), belt, stripes, gym:gym.trim(), createdAt:initial?.createdAt||Date.now() }); };
+  const save = () => {
+    if (!name.trim()) return;
+    onSave({
+      ...(initial||{}),           // preserve id, user_id, academy_id, created_at etc.
+      name:    name.trim(),
+      belt,
+      stripes,
+      gym:     gym.trim(),
+    });
+  };
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
