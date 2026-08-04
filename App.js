@@ -213,24 +213,31 @@ const db = {
     return data;
   },
   async upsertAthlete(athlete) {
-    // Use update if we have an id, insert otherwise
     if (athlete.id) {
-      const { id, user_id, created_at, ...fields } = athlete;
+      const { id, user_id, created_at, updated_at, ...fields } = athlete;
       const { data, error } = await supabase
         .from('athletes')
-        .update({ ...fields, updated_at: new Date().toISOString() })
+        .update(fields)
         .eq('id', id)
+        .eq('user_id', user_id)  // RLS needs user_id match
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('upsertAthlete update error:', error.message, error.code);
+        throw error;
+      }
       return data;
     } else {
+      const { updated_at, ...insertFields } = athlete;
       const { data, error } = await supabase
         .from('athletes')
-        .insert(athlete)
+        .insert(insertFields)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('upsertAthlete insert error:', error.message, error.code);
+        throw error;
+      }
       return data;
     }
   },
@@ -5459,8 +5466,13 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
     } catch (e) { console.error(e); }
   };
   const editProfile = async p => {
-    try { const ath = await db.upsertAthlete({ ...athlete, ...p }); setAthlete(ath); }
-    catch (e) { console.error(e); }
+    try {
+      const ath = await db.upsertAthlete({ ...athlete, ...p });
+      setAthlete(ath);
+    } catch (e) {
+      console.error('editProfile error:', e.message);
+      Alert.alert('Save failed', 'Could not save profile changes. Please try again.');
+    }
   };
   const deleteProfile = async () => { await supabase.auth.signOut(); };
   const switchProfile = () => setShowProfiles(false);
