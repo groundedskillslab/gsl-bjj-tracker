@@ -296,7 +296,24 @@ const db = {
     await supabase.from('training_days').delete().eq('athlete_id', athleteId).eq('date', date);
   },
 
-  // ── Journal ───────────────────────────────────────────────────────────────────
+  // ── Class Logs ────────────────────────────────────────────────────────────────
+  async getClassLogs(academyId) {
+    const { data } = await supabase.from('class_logs').select('*')
+      .eq('academy_id', academyId).order('date', { ascending: false }).limit(20);
+    return data || [];
+  },
+  async createClassLog(log) {
+    const { data, error } = await supabase.from('class_logs').insert({
+      id: uid(), coach_id: log.coachId, academy_id: log.academyId,
+      date: log.date, session_type: log.sessionType,
+      techniques: log.techniques, notes: log.notes,
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+  async deleteClassLog(id) {
+    await supabase.from('class_logs').delete().eq('id', id);
+  },
   async getJournalEntries(athleteId) {
     const { data } = await supabase.from('journal_entries').select('*')
       .eq('athlete_id', athleteId).order('date', { ascending: false });
@@ -317,6 +334,7 @@ const db = {
         id: entry.id, athlete_id: entry.athleteId,
         date: entry.date, session_type: entry.sessionType,
         techniques: entry.techniques, notes: entry.notes,
+        class_log_id: entry.classLogId || null,
       });
       if (error) console.error('journal insert error:', error.message);
     }
@@ -2407,7 +2425,7 @@ const OUTCOMES = [
   { key:'finished',  label:'Finished', color:'#993C1D', bg:'#FAECE7' },
 ];
 
-function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
+function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLogs=[], onLogDay }) {
   const today = new Date().toISOString().split('T')[0];
 
   // New entry form state
@@ -2417,8 +2435,17 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
   const [sessionNotes, setSessionNotes] = useState('');
   const [saving,       setSaving]       = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
-  const [viewMode,     setViewMode]     = useState('entries'); // 'entries' | 'techniques'
+  const [viewMode,     setViewMode]     = useState('entries');
   const [techSearch,   setTechSearch]   = useState('');
+  const [importingLog, setImportingLog] = useState(null); // class_log being imported
+  const [importTechs,  setImportTechs]  = useState([]);   // techniques with outcomes
+  const [importExtra,  setImportExtra]  = useState([]);   // athlete's own additions
+  const [importNotes,  setImportNotes]  = useState('');
+
+  // Already-imported class log IDs
+  const importedLogIds = new Set(journal.filter(e=>e.classLogId).map(e=>e.classLogId));
+
+  const pendingLogs = classLogs.filter(cl => !importedLogIds.has(cl.id));
 
   // Derived stats
   const allTechs = journal.flatMap(e => e.techniques || []);
@@ -2489,6 +2516,10 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
         const without = prev.filter(e => e.id !== entry.id);
         return [entry, ...without].sort((a,b)=>b.date.localeCompare(a.date));
       });
+      // Auto-log the session date as a training day
+      if (athlete?.id) {
+        onLogDay && onLogDay(entry.date);
+      }
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus(''), 2000);
       resetForm();
@@ -2505,6 +2536,47 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
     setJournal(prev => prev.filter(e => e.id !== id));
   };
 
+  const startImport = (classLog) => {
+    setImportingLog(classLog);
+    setImportTechs((classLog.techniques || []).map(t => ({
+      name: t.name, outcome: 'learned', notes: t.notes || '',
+    })));
+    setImportExtra([]);
+    setImportNotes('');
+  };
+
+  const saveImport = async () => {
+    if (!importingLog) return;
+    setSaving(true);
+    const allTechsToSave = [
+      ...importTechs.filter(t => t.name.trim()),
+      ...importExtra.filter(t => t.name.trim()),
+    ];
+    const entry = {
+      id: uid(), athleteId: athlete?.id,
+      date: importingLog.date,
+      sessionType: importingLog.session_type || 'class',
+      techniques: allTechsToSave,
+      notes: importNotes,
+      classLogId: importingLog.id,
+      isEdit: false,
+    };
+    try {
+      await db.upsertJournalEntry(entry);
+      setJournal(prev => [entry, ...prev].sort((a,b) => b.date.localeCompare(a.date)));
+      // Auto-log the class date as a training day
+      if (athlete?.id) {
+        onLogDay && onLogDay(importingLog.date);
+      }
+      setImportingLog(null);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(''), 2000);
+    } catch(e) {
+      console.error('import save failed:', e.message);
+    }
+    setSaving(false);
+  };
+
   const OutcomeBtn = ({ outcome, current, onPress }) => {
     const cfg = OUTCOMES.find(o=>o.key===outcome);
     const active = current === outcome;
@@ -2518,11 +2590,146 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[] }) {
       </TouchableOpacity>
     );
   };
+  };
 
   return (
     <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }} keyboardShouldPersistTaps="always">
 
-      {/* Stats strip */}
+      {/* ── Import modal for class log ── */}
+      {importingLog && (
+        <Modal visible transparent animationType="slide" onRequestClose={()=>setImportingLog(null)}>
+          <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
+            <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.97)',
+              alignItems:'center', justifyContent:'center', padding:20 }}
+              keyboardShouldPersistTaps="always">
+              <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.teal,
+                width:'100%', maxWidth:420, padding:20 }}>
+                <View style={{ flexDirection:'row', alignItems:'center', marginBottom:4 }}>
+                  <View style={{ width:3, height:16, backgroundColor:C.teal, marginRight:10 }}/>
+                  <Txt style={{ fontSize:15, fontFamily:F.bold, flex:1 }}>Import class log</Txt>
+                  <TouchableOpacity onPress={()=>setImportingLog(null)} activeOpacity={0.75}>
+                    <Txt style={{ color:C.muted, fontSize:20 }}>✕</Txt>
+                  </TouchableOpacity>
+                </View>
+                <Cap style={{ color:C.teal, marginBottom:16 }}>{importingLog.date}</Cap>
+
+                {/* Coach's techniques — adjustable outcomes */}
+                <Cap style={{ marginBottom:8 }}>From coach's class — set your outcomes</Cap>
+                <View style={{ borderWidth:1, borderColor:`${C.teal}33`, backgroundColor:`${C.teal}08`,
+                  padding:2, marginBottom:12 }}>
+                  {importTechs.map((tech, i) => (
+                    <View key={i} style={{ padding:10, borderBottomWidth:i<importTechs.length-1?1:0,
+                      borderBottomColor:C.faint }}>
+                      <Txt style={{ fontSize:13, fontFamily:F.semi, marginBottom:2 }}>{tech.name}</Txt>
+                      {tech.notes ? <Cap style={{ fontSize:8, marginBottom:6, color:C.muted }}>{tech.notes}</Cap> : null}
+                      <View style={{ flexDirection:'row', gap:6 }}>
+                        {OUTCOMES.map(o => {
+                          const active = tech.outcome === o.key;
+                          return (
+                            <TouchableOpacity key={o.key} onPress={()=>setImportTechs(ts=>ts.map((t,idx)=>idx===i?{...t,outcome:o.key}:t))}
+                              activeOpacity={0.75}
+                              style={{ paddingHorizontal:10, paddingVertical:5, borderWidth:1,
+                                borderColor: active ? o.color : C.border,
+                                backgroundColor: active ? o.bg : 'transparent' }}>
+                              <Txt style={{ fontSize:9, fontFamily:F.semi, color: active ? o.color : C.muted }}>{o.label}</Txt>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Athlete's own additional techniques */}
+                <Cap style={{ marginBottom:8 }}>Add your own techniques (optional)</Cap>
+                {importExtra.map((tech, i) => (
+                  <View key={i} style={{ marginBottom:8, padding:10, borderWidth:1,
+                    borderColor:C.faint, backgroundColor:C.faint }}>
+                    <View style={{ flexDirection:'row', gap:6, marginBottom:6 }}>
+                      <TextInput value={tech.name}
+                        onChangeText={v=>setImportExtra(ts=>ts.map((t,idx)=>idx===i?{...t,name:v}:t))}
+                        placeholder="Technique you drilled or finished…"
+                        placeholderTextColor={C.muted}
+                        style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
+                          fontSize:12, fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
+                      <TouchableOpacity onPress={()=>setImportExtra(ts=>ts.filter((_,idx)=>idx!==i))} activeOpacity={0.75}>
+                        <Txt style={{ color:C.muted, fontSize:18, paddingTop:8 }}>✕</Txt>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ flexDirection:'row', gap:6 }}>
+                      {OUTCOMES.map(o => {
+                        const active = tech.outcome === o.key;
+                        return (
+                          <TouchableOpacity key={o.key} onPress={()=>setImportExtra(ts=>ts.map((t,idx)=>idx===i?{...t,outcome:o.key}:t))}
+                            activeOpacity={0.75}
+                            style={{ paddingHorizontal:10, paddingVertical:5, borderWidth:1,
+                              borderColor: active ? o.color : C.border,
+                              backgroundColor: active ? o.bg : 'transparent' }}>
+                            <Txt style={{ fontSize:9, fontFamily:F.semi, color: active ? o.color : C.muted }}>{o.label}</Txt>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+                <TouchableOpacity onPress={()=>setImportExtra(ts=>[...ts,{name:'',outcome:'attempted',notes:''}])}
+                  activeOpacity={0.75}
+                  style={{ flexDirection:'row', alignItems:'center', gap:8, padding:10,
+                    borderWidth:1, borderStyle:'dashed', borderColor:C.borderMid, marginBottom:12 }}>
+                  <Txt style={{ fontSize:18, color:C.muted }}>+</Txt>
+                  <Cap>Add technique</Cap>
+                </TouchableOpacity>
+
+                <Cap style={{ marginBottom:6 }}>Your notes</Cap>
+                <TextInput value={importNotes} onChangeText={setImportNotes}
+                  placeholder="How did it go? What clicked?" placeholderTextColor={C.muted}
+                  multiline numberOfLines={3}
+                  style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                    fontFamily:F.body, padding:10, minHeight:60, marginBottom:16, textAlignVertical:'top' }}/>
+
+                <TouchableOpacity onPress={saveImport} disabled={saving} activeOpacity={0.8}
+                  style={{ backgroundColor:C.teal, padding:14, alignItems:'center' }}>
+                  {saving
+                    ? <ActivityIndicator color="#fff"/>
+                    : <Txt style={{ fontSize:10, fontFamily:F.semi, letterSpacing:1.5,
+                        textTransform:'uppercase', color:'#fff' }}>Save to my journal</Txt>}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
+
+      {/* ── Pending class logs banner ── */}
+      {pendingLogs.length > 0 && (
+        <View style={{ marginBottom:16 }}>
+          <Cap style={{ marginBottom:8, color:C.teal }}>From your coach</Cap>
+          {pendingLogs.map(cl => {
+            const techNames = (cl.techniques||[]).map(t=>t.name).filter(Boolean).slice(0,3).join(', ');
+            const st = SESSION_TYPES.find(s=>s.key===cl.session_type)||SESSION_TYPES[0];
+            return (
+              <View key={cl.id} style={{ borderWidth:1, borderColor:`${C.teal}44`,
+                backgroundColor:`${C.teal}08`, padding:12, marginBottom:8, borderRadius:8 }}>
+                <View style={{ flexDirection:'row', alignItems:'flex-start', gap:10 }}>
+                  <Txt style={{ fontSize:20 }}>{st.icon}</Txt>
+                  <View style={{ flex:1 }}>
+                    <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text, marginBottom:2 }}>
+                      {st.label} · {cl.date}
+                    </Txt>
+                    <Cap style={{ fontSize:9, color:C.teal, marginBottom:8 }}>{techNames}{(cl.techniques||[]).length>3?` +${(cl.techniques||[]).length-3} more`:''}</Cap>
+                    <TouchableOpacity onPress={()=>startImport(cl)} activeOpacity={0.75}
+                      style={{ alignSelf:'flex-start', borderWidth:1, borderColor:C.teal,
+                        backgroundColor:C.teal, paddingHorizontal:12, paddingVertical:6, borderRadius:4 }}>
+                      <Txt style={{ fontSize:9, fontFamily:F.semi, color:'#fff', letterSpacing:1,
+                        textTransform:'uppercase' }}>Import to journal</Txt>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
       <View style={{ flexDirection:'row', gap:8, marginBottom:16 }}>
         {[
           { label:'Techniques learned', value:totalLearned,   color:'#1D9E75' },
@@ -4336,7 +4543,12 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
     return s;
   })();
 
-  const [newAthleteFirst,   setNewAthleteFirst]   = useState('');
+  const [showClassLog,    setShowClassLog]    = useState(false);
+  const [classLogTechs,   setClassLogTechs]   = useState([{ name:'', notes:'' }]);
+  const [classLogDate,    setClassLogDate]     = useState(new Date().toISOString().split('T')[0]);
+  const [classLogType,    setClassLogType]     = useState('class');
+  const [classLogNotes,   setClassLogNotes]    = useState('');
+  const [classLogSaving,  setClassLogSaving]   = useState(false);
   const [newAthleteLast,    setNewAthleteLast]     = useState('');
   const [newAthleteEmail,   setNewAthleteEmail]    = useState('');
   const [newAthleteAcademy, setNewAthleteAcademy] = useState('');
@@ -4405,7 +4617,25 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
     setManageLoading(false);
   };
 
-  const assignCoach = async (athleteUserId, athleteName) => {
+  const saveClassLog = async () => {
+    const validTechs = classLogTechs.filter(t => t.name.trim());
+    if (!validTechs.length) return;
+    const myAcademyId = allUsers.find(u => u.user_id === session.user.id)?.academy_id;
+    if (!myAcademyId) { setManageMsg('❌ No academy assigned to your account.'); return; }
+    setClassLogSaving(true);
+    try {
+      await db.createClassLog({
+        coachId: session.user.id, academyId: myAcademyId,
+        date: classLogDate, sessionType: classLogType,
+        techniques: validTechs, notes: classLogNotes,
+      });
+      setShowClassLog(false);
+      setClassLogTechs([{ name:'', notes:'' }]);
+      setClassLogNotes(''); setClassLogDate(new Date().toISOString().split('T')[0]);
+      setManageMsg('✓ Class log published to athletes.');
+    } catch(e) { setManageMsg('❌ ' + (e.message || 'Failed to save')); }
+    setClassLogSaving(false);
+  };
     if (!athleteUserId) return;
     setManageLoading(true); setManageMsg('');
     try {
@@ -4501,6 +4731,11 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
             </Txt>
             {isAdmin && <Cap style={{ color:C.gold, fontSize:7 }}>Grounded Skills Lab · All Academies</Cap>}
           </View>
+          <TouchableOpacity onPress={()=>setShowClassLog(true)} activeOpacity={0.75}
+            style={{ borderWidth:1, borderColor:`${C.teal}55`, backgroundColor:`${C.teal}15`,
+              paddingHorizontal:8, paddingVertical:5 }}>
+            <Txt style={{ fontSize:8, fontFamily:F.semi, color:C.teal, letterSpacing:1, textTransform:'uppercase' }}>📋 Class</Txt>
+          </TouchableOpacity>
           <TouchableOpacity onPress={()=>setIsDark(p=>!p)} activeOpacity={0.75}
             style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.faint, paddingHorizontal:8, paddingVertical:5 }}>
             <Txt style={{ fontSize:12 }}>{isDark?'☀️':'🌙'}</Txt>
@@ -5086,6 +5321,89 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
           </View>
         </View>
       )}
+
+      {/* ── Log Class Modal ── */}
+      <Modal visible={showClassLog} transparent animationType="slide" onRequestClose={()=>setShowClassLog(false)}>
+        <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
+          <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.97)',
+            alignItems:'center', justifyContent:'center', padding:20 }}
+            keyboardShouldPersistTaps="always">
+            <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid,
+              width:'100%', maxWidth:420, padding:20 }}>
+              <View style={{ flexDirection:'row', alignItems:'center', marginBottom:16 }}>
+                <View style={{ width:3, height:16, backgroundColor:C.teal, marginRight:10 }}/>
+                <Txt style={{ fontSize:16, fontFamily:F.bold, flex:1 }}>Log Class</Txt>
+                <TouchableOpacity onPress={()=>setShowClassLog(false)} activeOpacity={0.75}>
+                  <Txt style={{ color:C.muted, fontSize:20 }}>✕</Txt>
+                </TouchableOpacity>
+              </View>
+              <Cap style={{ marginBottom:6 }}>Date</Cap>
+              <TextInput value={classLogDate} onChangeText={setClassLogDate}
+                placeholder="YYYY-MM-DD" placeholderTextColor={C.muted}
+                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                  fontFamily:F.body, padding:10, marginBottom:14 }}/>
+              <Cap style={{ marginBottom:8 }}>Session type</Cap>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }}>
+                <View style={{ flexDirection:'row', gap:6 }}>
+                  {SESSION_TYPES.map(st=>(
+                    <TouchableOpacity key={st.key} onPress={()=>setClassLogType(st.key)} activeOpacity={0.75}
+                      style={{ flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:12, paddingVertical:8,
+                        borderWidth:1, borderColor:classLogType===st.key?C.teal:C.border,
+                        backgroundColor:classLogType===st.key?`${C.teal}15`:'transparent' }}>
+                      <Txt style={{ fontSize:13 }}>{st.icon}</Txt>
+                      <Txt style={{ fontSize:11, fontFamily:F.semi, color:classLogType===st.key?C.teal:C.muted }}>{st.label}</Txt>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+              <Cap style={{ marginBottom:8 }}>Techniques covered</Cap>
+              {classLogTechs.map((tech, i) => (
+                <View key={i} style={{ marginBottom:8, padding:10, borderWidth:1,
+                  borderColor:C.faint, backgroundColor:C.faint }}>
+                  <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:6 }}>
+                    <TextInput value={tech.name}
+                      onChangeText={v=>setClassLogTechs(ts=>ts.map((t,idx)=>idx===i?{...t,name:v}:t))}
+                      placeholder="Technique name…" placeholderTextColor={C.muted}
+                      style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
+                        fontSize:13, fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
+                    {classLogTechs.length > 1 && (
+                      <TouchableOpacity onPress={()=>setClassLogTechs(ts=>ts.filter((_,idx)=>idx!==i))} activeOpacity={0.75}>
+                        <Txt style={{ color:C.muted, fontSize:18 }}>✕</Txt>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <TextInput value={tech.notes||''}
+                    onChangeText={v=>setClassLogTechs(ts=>ts.map((t,idx)=>idx===i?{...t,notes:v}:t))}
+                    placeholder="Coaching note (optional)…" placeholderTextColor={C.muted}
+                    style={{ borderWidth:1, borderColor:C.border, color:C.text, fontSize:11,
+                      fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
+                </View>
+              ))}
+              <TouchableOpacity onPress={()=>setClassLogTechs(ts=>[...ts,{name:'',notes:''}])} activeOpacity={0.75}
+                style={{ flexDirection:'row', alignItems:'center', gap:8, padding:10,
+                  borderWidth:1, borderStyle:'dashed', borderColor:C.borderMid, marginBottom:14 }}>
+                <Txt style={{ fontSize:18, color:C.muted }}>+</Txt>
+                <Cap>Add technique</Cap>
+              </TouchableOpacity>
+              <Cap style={{ marginBottom:6 }}>Class notes</Cap>
+              <TextInput value={classLogNotes} onChangeText={setClassLogNotes}
+                placeholder="Coaching cues, key details, what to focus on next session…"
+                placeholderTextColor={C.muted} multiline numberOfLines={3}
+                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                  fontFamily:F.body, padding:10, minHeight:70, marginBottom:16, textAlignVertical:'top' }}/>
+              <TouchableOpacity onPress={saveClassLog}
+                disabled={classLogSaving || !classLogTechs.some(t=>t.name.trim())} activeOpacity={0.8}
+                style={{ backgroundColor:classLogTechs.some(t=>t.name.trim())?C.teal:C.faint,
+                  padding:14, alignItems:'center' }}>
+                {classLogSaving
+                  ? <ActivityIndicator color="#fff"/>
+                  : <Txt style={{ fontSize:10, fontFamily:F.semi, letterSpacing:1.5,
+                      textTransform:'uppercase', color:'#fff' }}>Publish to Academy</Txt>}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -5368,6 +5686,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [competitions, setCompetitions] = useState([]);
   const [trainingDays, setTrainingDays] = useState([]);
   const [journal,      setJournal]      = useState([]);
+  const [classLogs,    setClassLogs]    = useState([]);
   const [showProfiles, setShowProfiles] = useState(false);
 
   const [tab,     setTab]     = useState('Track');
@@ -5416,7 +5735,14 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           id: e.id, athleteId: e.athlete_id,
           date: e.date, sessionType: e.session_type,
           techniques: e.techniques || [], notes: e.notes || '',
+          classLogId: e.class_log_id || null,
         })));
+
+        // Load class logs if athlete has an academy
+        if (ath.academy_id) {
+          const logs = await db.getClassLogs(ath.academy_id);
+          setClassLogs(logs);
+        }
       } catch (e) { console.error('Load error:', e); }
       setLoading(false);
     })();
@@ -5688,21 +6014,58 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
 
           {/* Nav tabs */}
           <View style={{ flexDirection:'row', backgroundColor:C.surface, borderTopWidth:1, borderTopColor:C.border }}>
-            {TABS.map(({ key, label, icon }) => (
-              <TouchableOpacity key={key} onPress={()=>setTab(key)} activeOpacity={0.75}
-                style={{ flex:1, paddingVertical:9, alignItems:'center',
-                  borderTopWidth:2, borderTopColor:tab===key?C.gold:'transparent',
-                  backgroundColor:tab===key?C.goldDim:'transparent' }}>
-                <Text style={{ fontSize:18, lineHeight:22 }}>{icon}</Text>
-                <Text style={{ fontSize:9, fontFamily:tab===key?F.semi:F.body,
-                  letterSpacing:0.5, color:tab===key?C.gold:C.muted, marginTop:2 }}>{label}</Text>
-              </TouchableOpacity>
-            ))}
+            {TABS.map(({ key, label, icon }) => {
+              const isPending = key === 'Journal' && classLogs.filter(cl =>
+                !journal.some(e => e.classLogId === cl.id)
+              ).length > 0;
+              return (
+                <TouchableOpacity key={key} onPress={()=>setTab(key)} activeOpacity={0.75}
+                  style={{ flex:1, paddingVertical:9, alignItems:'center',
+                    borderTopWidth:2, borderTopColor:tab===key?C.gold:'transparent',
+                    backgroundColor:tab===key?C.goldDim:'transparent' }}>
+                  <View style={{ position:'relative' }}>
+                    <Text style={{ fontSize:18, lineHeight:22 }}>{icon}</Text>
+                    {isPending && (
+                      <View style={{ position:'absolute', top:-2, right:-4, width:8, height:8,
+                        borderRadius:4, backgroundColor:C.teal, borderWidth:1, borderColor:C.bg }}/>
+                    )}
+                  </View>
+                  <Text style={{ fontSize:9, fontFamily:tab===key?F.semi:F.body,
+                    letterSpacing:0.5, color:tab===key?C.gold:C.muted, marginTop:2 }}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       </View>
 
       {/* ── Screens ── */}
+
+      {/* Pending class log reminder banner — shown on all tabs except Journal */}
+      {tab !== 'Journal' && classLogs.filter(cl => !journal.some(e => e.classLogId === cl.id)).length > 0 && (() => {
+        const pending = classLogs.filter(cl => !journal.some(e => e.classLogId === cl.id));
+        const latest = pending[0];
+        const st = SESSION_TYPES.find(s => s.key === latest.session_type) || SESSION_TYPES[0];
+        return (
+          <TouchableOpacity onPress={()=>setTab('Journal')} activeOpacity={0.85}
+            style={{ flexDirection:'row', alignItems:'center', gap:12, backgroundColor:`${C.teal}18`,
+              borderBottomWidth:1, borderBottomColor:`${C.teal}33`, paddingHorizontal:14, paddingVertical:10 }}>
+            <Txt style={{ fontSize:16 }}>{st.icon}</Txt>
+            <View style={{ flex:1 }}>
+              <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.teal }}>
+                {pending.length === 1
+                  ? `New class log from your coach — ${latest.date}`
+                  : `${pending.length} unimported class logs from your coach`}
+              </Txt>
+              <Cap style={{ fontSize:8, color:C.teal, marginTop:2 }}>
+                Tap to open Journal and import
+              </Cap>
+            </View>
+            <Txt style={{ color:C.teal, fontSize:16 }}>→</Txt>
+          </TouchableOpacity>
+        );
+      })()}
+
       {tab==='Track' && (
         <TrackScreen
           activeRoll={activeRoll} onStartRoll={startRoll} onEndRoll={finishRoll}
@@ -5713,6 +6076,8 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
         <JournalScreen
           journal={journal} setJournal={setJournal}
           athlete={athlete}
+          classLogs={classLogs}
+          onLogDay={logDay}
           allTechniques={[...submissions,...sweeps,...positions,...transitions,...guardPulls,...takedowns]}/>
       )}
       {tab==='Charts' && (
