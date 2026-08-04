@@ -4635,6 +4635,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
     } catch(e) { setManageMsg('❌ ' + (e.message || 'Failed to save')); }
     setClassLogSaving(false);
   };
+
+  const assignCoach = async (athleteUserId, athleteName) => {
     if (!athleteUserId) return;
     setManageLoading(true); setManageMsg('');
     try {
