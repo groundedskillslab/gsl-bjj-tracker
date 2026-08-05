@@ -5688,6 +5688,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [trainingDays, setTrainingDays] = useState([]);
   const [journal,      setJournal]      = useState([]);
   const [classLogs,    setClassLogs]    = useState([]);
+  const [dismissedBanner, setDismissedBanner] = useState(false);
   const [showProfiles, setShowProfiles] = useState(false);
 
   const [tab,     setTab]     = useState('Track');
@@ -5743,6 +5744,8 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
         if (ath.academy_id) {
           const logs = await db.getClassLogs(ath.academy_id);
           setClassLogs(logs);
+          // Reset dismissed state so new logs show the banner
+          setDismissedBanner(false);
         }
       } catch (e) { console.error('Load error:', e); }
       setLoading(false);
@@ -6020,7 +6023,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
                 !journal.some(e => e.classLogId === cl.id)
               ).length > 0;
               return (
-                <TouchableOpacity key={key} onPress={()=>setTab(key)} activeOpacity={0.75}
+                <TouchableOpacity key={key} onPress={()=>{ setTab(key); if(key==='Journal') setDismissedBanner(false); }} activeOpacity={0.75}
                   style={{ flex:1, paddingVertical:9, alignItems:'center',
                     borderTopWidth:2, borderTopColor:tab===key?C.gold:'transparent',
                     backgroundColor:tab===key?C.goldDim:'transparent' }}>
@@ -6043,27 +6046,29 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
       {/* ── Screens ── */}
 
       {/* Pending class log reminder banner — shown on all tabs except Journal */}
-      {tab !== 'Journal' && classLogs.filter(cl => !journal.some(e => e.classLogId === cl.id)).length > 0 && (() => {
+      {!dismissedBanner && tab !== 'Journal' && classLogs.filter(cl => !journal.some(e => e.classLogId === cl.id)).length > 0 && (() => {
         const pending = classLogs.filter(cl => !journal.some(e => e.classLogId === cl.id));
         const latest = pending[0];
         const st = SESSION_TYPES.find(s => s.key === latest.session_type) || SESSION_TYPES[0];
         return (
-          <TouchableOpacity onPress={()=>setTab('Journal')} activeOpacity={0.85}
-            style={{ flexDirection:'row', alignItems:'center', gap:12, backgroundColor:`${C.teal}18`,
-              borderBottomWidth:1, borderBottomColor:`${C.teal}33`, paddingHorizontal:14, paddingVertical:10 }}>
+          <View style={{ flexDirection:'row', alignItems:'center', gap:12, backgroundColor:`${C.teal}18`,
+            borderBottomWidth:1, borderBottomColor:`${C.teal}33`, paddingHorizontal:14, paddingVertical:10 }}>
             <Txt style={{ fontSize:16 }}>{st.icon}</Txt>
-            <View style={{ flex:1 }}>
+            <TouchableOpacity onPress={()=>setTab('Journal')} activeOpacity={0.85} style={{ flex:1 }}>
               <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.teal }}>
                 {pending.length === 1
-                  ? `New class log from your coach — ${latest.date}`
-                  : `${pending.length} unimported class logs from your coach`}
+                  ? `New class log — ${latest.date}`
+                  : `${pending.length} unimported class logs`}
               </Txt>
               <Cap style={{ fontSize:8, color:C.teal, marginTop:2 }}>
                 Tap to open Journal and import
               </Cap>
-            </View>
-            <Txt style={{ color:C.teal, fontSize:16 }}>→</Txt>
-          </TouchableOpacity>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={()=>setDismissedBanner(true)} activeOpacity={0.75}
+              style={{ padding:6 }}>
+              <Txt style={{ color:C.teal, fontSize:16 }}>✕</Txt>
+            </TouchableOpacity>
+          </View>
         );
       })()}
 
