@@ -296,7 +296,18 @@ const db = {
     await supabase.from('training_days').delete().eq('athlete_id', athleteId).eq('date', date);
   },
 
-  // ── Class Logs ────────────────────────────────────────────────────────────────
+  // ── User Settings ─────────────────────────────────────────────────────────────
+  async getTutorialDone(userId) {
+    const { data } = await supabase.from('user_settings')
+      .select('tutorial_done').eq('user_id', userId).maybeSingle();
+    return data?.tutorial_done || false;
+  },
+  async setTutorialDone(userId) {
+    const { error } = await supabase.from('user_settings')
+      .upsert({ user_id: userId, tutorial_done: true, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' });
+    if (error) console.error('setTutorialDone error:', error.message);
+  },
   async getClassLogs(academyId) {
     const { data } = await supabase.from('class_logs').select('*')
       .eq('academy_id', academyId).order('date', { ascending: false }).limit(20);
@@ -2409,6 +2420,126 @@ function generateInsights(rolls, takedowns, sweeps, transitions, positions, comp
   }
 
   return insights;
+}
+
+// ─── Tutorial Overlay ─────────────────────────────────────────────────────────
+const TUTORIAL_STEPS = [
+  {
+    icon: '🥋',
+    title: 'Log your first roll',
+    body: 'Tap Track to start recording a sparring session live. Score points, track positions, and end the roll when you\'re done.',
+    tip: null,
+    tab: 'Track',
+  },
+  {
+    icon: '⚡',
+    title: 'Track during the roll',
+    body: 'Use the score sheet during live rolls to record sweeps, takedowns, guard passes, and submissions as they happen — for both you and your opponent.',
+    tip: 'Every event you log becomes an insight. The more detail you capture, the smarter your analytics get.',
+    tab: 'Track',
+  },
+  {
+    icon: '📖',
+    title: 'Log every class in the Journal',
+    body: 'After training, open the Journal tab and log what you worked on. Every technique gets a tag — Learned, Tried, or Finished.',
+    tip: 'Be specific. "Arm drag to back take" is more useful than "back takes". Your insights are only as good as what you log.',
+    tab: 'Journal',
+  },
+  {
+    icon: '✅',
+    title: 'Always log what you tried and finished',
+    body: 'In the custom technique field, add every submission or technique you attempted or completed — even if it wasn\'t drilled in class that day.',
+    tip: 'Set the outcome to "Tried" if you went for it but didn\'t finish. Set it to "Finished" if you completed it. This builds your finish rate data over time.',
+    tab: 'Journal',
+  },
+  {
+    icon: '📊',
+    title: 'Watch your insights grow',
+    body: 'Charts tracks your win rate, submission rates, consistency streaks, and technique patterns. The more you log, the more accurate your insights become.',
+    tip: null,
+    tab: 'Charts',
+  },
+  {
+    icon: '🔔',
+    title: 'Import your coach\'s class logs',
+    body: 'When your coach posts a class, a teal banner appears. Tap it to open your Journal, import the techniques, then add anything extra you tried or finished.',
+    tip: 'Importing a class log automatically marks that day on your consistency calendar — no extra step needed.',
+    tab: 'Journal',
+  },
+];
+
+function TutorialOverlay({ onDone, onSkip }) {
+  const [step, setStep] = useState(0);
+  const total = TUTORIAL_STEPS.length;
+  const s = TUTORIAL_STEPS[step];
+
+  return (
+    <View style={{ position:'absolute', inset:0, top:0, left:0, right:0, bottom:0,
+      backgroundColor:'rgba(0,0,0,0.82)', zIndex:999, justifyContent:'flex-end' }}>
+
+      {/* Tap-outside to skip */}
+      <TouchableOpacity style={{ position:'absolute', inset:0, top:0, left:0, right:0, bottom:0 }}
+        activeOpacity={1} onPress={()=>{}} />
+
+      {/* Tutorial card */}
+      <View style={{ backgroundColor:C.card, borderWidth:1, borderColor:C.borderMid,
+        margin:14, marginBottom:24, borderRadius:14, overflow:'hidden' }}>
+
+        {/* Header */}
+        <View style={{ backgroundColor:C.gold, paddingHorizontal:16, paddingVertical:10,
+          flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
+          <Txt style={{ fontSize:10, fontFamily:F.semi, color:'#0D0D0B', letterSpacing:1.5,
+            textTransform:'uppercase' }}>Getting started</Txt>
+          <Cap style={{ color:'#0D0D0B', fontSize:9, opacity:0.65 }}>{step+1} of {total}</Cap>
+        </View>
+
+        {/* Body */}
+        <View style={{ padding:16 }}>
+          <Txt style={{ fontSize:26, marginBottom:10 }}>{s.icon}</Txt>
+          <Txt style={{ fontSize:16, fontFamily:F.display, color:C.text, marginBottom:8 }}>{s.title}</Txt>
+          <Txt style={{ fontSize:13, color:C.textDim, lineHeight:20 }}>{s.body}</Txt>
+
+          {/* Gold tip box */}
+          {s.tip && (
+            <View style={{ borderLeftWidth:2, borderLeftColor:C.gold,
+              backgroundColor:`${C.gold}12`, padding:10, marginTop:12, borderRadius:2 }}>
+              <Txt style={{ fontSize:11, color:C.gold, lineHeight:17 }}>{s.tip}</Txt>
+            </View>
+          )}
+        </View>
+
+        {/* Footer */}
+        <View style={{ flexDirection:'row', alignItems:'center', gap:8,
+          paddingHorizontal:16, paddingVertical:12,
+          borderTopWidth:1, borderTopColor:C.border }}>
+          <TouchableOpacity onPress={onSkip} activeOpacity={0.75} style={{ flex:1 }}>
+            <Cap style={{ color:C.muted }}>Skip tutorial</Cap>
+          </TouchableOpacity>
+
+          {/* Step dots */}
+          <View style={{ flexDirection:'row', gap:4 }}>
+            {TUTORIAL_STEPS.map((_,i) => (
+              <View key={i} style={{
+                height:5, borderRadius:3,
+                width: i===step ? 14 : 5,
+                backgroundColor: i===step ? C.gold : C.border,
+              }}/>
+            ))}
+          </View>
+
+          <TouchableOpacity onPress={()=>{ if(step<total-1) setStep(s=>s+1); else onDone(); }}
+            activeOpacity={0.8}
+            style={{ backgroundColor: step===total-1 ? C.sage : C.gold,
+              paddingHorizontal:14, paddingVertical:8, borderRadius:6 }}>
+            <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1,
+              textTransform:'uppercase', color:'#0D0D0B' }}>
+              {step===total-1 ? 'Done ✓' : 'Next →'}
+            </Txt>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 // ─── Journal Screen ────────────────────────────────────────────────────────────
@@ -5686,9 +5817,10 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [activeRoll,   setActiveRoll]   = useState(null);
   const [competitions, setCompetitions] = useState([]);
   const [trainingDays, setTrainingDays] = useState([]);
-  const [journal,      setJournal]      = useState([]);
-  const [classLogs,    setClassLogs]    = useState([]);
+  const [journal,         setJournal]         = useState([]);
+  const [classLogs,       setClassLogs]       = useState([]);
   const [dismissedBanner, setDismissedBanner] = useState(false);
+  const [showTutorial,    setShowTutorial]    = useState(false);
   const [showProfiles, setShowProfiles] = useState(false);
 
   const [tab,     setTab]     = useState('Track');
@@ -5744,8 +5876,13 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
         if (ath.academy_id) {
           const logs = await db.getClassLogs(ath.academy_id);
           setClassLogs(logs);
-          // Reset dismissed state so new logs show the banner
           setDismissedBanner(false);
+        }
+
+        // Show tutorial for first-time users (not when impersonating)
+        if (!impersonatedAthlete && session?.user) {
+          const done = await db.getTutorialDone(session.user.id);
+          if (!done) setShowTutorial(true);
         }
       } catch (e) { console.error('Load error:', e); }
       setLoading(false);
@@ -5826,6 +5963,11 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
     if (!athlete?.id) return;
     setTrainingDays(days => days.filter(d => d !== ds));
     await db.removeTrainingDay(athlete.id, ds).catch(console.error);
+  };
+
+  const dismissTutorial = async () => {
+    setShowTutorial(false);
+    if (session?.user) await db.setTutorialDone(session.user.id);
   };
 
 
@@ -5987,6 +6129,13 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
                 <Txt style={{ fontSize:8, fontFamily:F.semi, letterSpacing:1, textTransform:'uppercase', color:C.teal }}>Coach</Txt>
               </TouchableOpacity>
             )}
+            {/* Replay tutorial */}
+            <TouchableOpacity onPress={()=>setShowTutorial(true)} activeOpacity={0.75}
+              style={{ borderWidth:1, borderColor:`${C.teal}55`, backgroundColor:`${C.teal}15`,
+                paddingHorizontal:8, paddingVertical:5 }}>
+              <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.teal, letterSpacing:1,
+                textTransform:'uppercase' }}>? Help</Txt>
+            </TouchableOpacity>
             {/* Sign out */}
             <TouchableOpacity onPress={()=>supabase.auth.signOut()} activeOpacity={0.75}
               style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.faint, paddingHorizontal:8, paddingVertical:5 }}>
@@ -6110,6 +6259,13 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           profiles={profiles} activeProfileId={activeProfileId}
           onSelect={switchProfile} onNew={createProfile} onEdit={editProfile} onDelete={deleteProfile}
           confirm={confirm}/>
+      )}
+
+      {/* Tutorial overlay — shown on first login, dismissed permanently */}
+      {showTutorial && (
+        <TutorialOverlay
+          onDone={dismissTutorial}
+          onSkip={dismissTutorial}/>
       )}
     </View>
     </ThemeContext.Provider>
