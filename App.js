@@ -2435,10 +2435,6 @@ function generateInsights(rolls, takedowns, sweeps, transitions, positions, comp
 }
 
 // ─── YouTube Search Modal ────────────────────────────────────────────────────
-const YT_API_KEY = typeof process !== 'undefined'
-  ? (process.env.EXPO_PUBLIC_YT_API_KEY || '')
-  : '';
-
 function YouTubeSearchModal({ visible, onClose, onSelect, initialQuery='' }) {
   const [query,   setQuery]   = useState(initialQuery);
   const [results, setResults] = useState([]);
@@ -2457,15 +2453,10 @@ function YouTubeSearchModal({ visible, onClose, onSelect, initialQuery='' }) {
     if (!q.trim()) return;
     setLoading(true); setError('');
     try {
-      const apiKey = YT_API_KEY || (typeof __EXPO_ENV__ !== 'undefined' ? __EXPO_ENV__.EXPO_PUBLIC_YT_API_KEY : '');
-      if (!apiKey) {
-        setError('YouTube API key not configured. Paste a URL directly instead.');
-        setLoading(false); return;
-      }
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(q + ' bjj jiu jitsu technique')}&key=${apiKey}`;
-      const res = await fetch(url);
+      // Call our Netlify proxy function — API key stays server-side
+      const res = await fetch(`/.netlify/functions/youtube-search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
-      if (data.error) { setError(data.error.message); setLoading(false); return; }
+      if (data.error) { setError(data.error.message || data.error); setLoading(false); return; }
       setResults(data.items || []);
     } catch(e) { setError('Search failed. Check your connection.'); }
     setLoading(false);
@@ -4982,7 +4973,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   const [classLogType,    setClassLogType]     = useState('class');
   const [classLogNotes,   setClassLogNotes]    = useState('');
   const [classLogSaving,  setClassLogSaving]   = useState(false);
-  const [ytSearchIndex,   setYtSearchIndex]    = useState(null); // which tech row is searching
+  const [ytSearchIndex,   setYtSearchIndex]    = useState(null);
+  const [newAthleteFirst,   setNewAthleteFirst]   = useState('');
   const [newAthleteLast,    setNewAthleteLast]     = useState('');
   const [newAthleteEmail,   setNewAthleteEmail]    = useState('');
   const [newAthleteAcademy, setNewAthleteAcademy] = useState('');
