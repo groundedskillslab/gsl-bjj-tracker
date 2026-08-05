@@ -2434,7 +2434,160 @@ function generateInsights(rolls, takedowns, sweeps, transitions, positions, comp
   return insights;
 }
 
-// ─── Video/URL helpers ────────────────────────────────────────────────────────
+// ─── YouTube Search Modal ────────────────────────────────────────────────────
+const YT_API_KEY = typeof process !== 'undefined'
+  ? (process.env.EXPO_PUBLIC_YT_API_KEY || '')
+  : '';
+
+function YouTubeSearchModal({ visible, onClose, onSelect, initialQuery='' }) {
+  const [query,   setQuery]   = useState(initialQuery);
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+
+  useEffect(() => {
+    if (visible && initialQuery) {
+      setQuery(initialQuery);
+      search(initialQuery);
+    }
+    if (!visible) { setResults([]); setError(''); }
+  }, [visible, initialQuery]);
+
+  const search = async (q = query) => {
+    if (!q.trim()) return;
+    setLoading(true); setError('');
+    try {
+      const apiKey = YT_API_KEY || (typeof __EXPO_ENV__ !== 'undefined' ? __EXPO_ENV__.EXPO_PUBLIC_YT_API_KEY : '');
+      if (!apiKey) {
+        setError('YouTube API key not configured. Paste a URL directly instead.');
+        setLoading(false); return;
+      }
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(q + ' bjj jiu jitsu technique')}&key=${apiKey}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.error) { setError(data.error.message); setLoading(false); return; }
+      setResults(data.items || []);
+    } catch(e) { setError('Search failed. Check your connection.'); }
+    setLoading(false);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.92)', justifyContent:'flex-end' }}>
+          <View style={{ backgroundColor:C.surface, borderTopLeftRadius:16, borderTopRightRadius:16,
+            borderTopWidth:1, borderColor:C.borderMid, maxHeight:'85%' }}>
+
+            {/* Header */}
+            <View style={{ flexDirection:'row', alignItems:'center', padding:16,
+              borderBottomWidth:1, borderBottomColor:C.border }}>
+              <Txt style={{ fontSize:18, marginRight:8 }}>▶️</Txt>
+              <Txt style={{ fontSize:15, fontFamily:F.bold, flex:1, color:C.text }}>Search YouTube</Txt>
+              <TouchableOpacity onPress={onClose} activeOpacity={0.75}>
+                <Txt style={{ color:C.muted, fontSize:20 }}>✕</Txt>
+              </TouchableOpacity>
+            </View>
+
+            {/* Search bar */}
+            <View style={{ flexDirection:'row', alignItems:'center', gap:8,
+              padding:12, borderBottomWidth:1, borderBottomColor:C.border }}>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                onSubmitEditing={()=>search()}
+                placeholder="Search for a technique video…"
+                placeholderTextColor={C.muted}
+                returnKeyType="search"
+                style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
+                  fontSize:13, fontFamily:F.body, padding:10, backgroundColor:C.card,
+                  borderRadius:6 }}/>
+              <TouchableOpacity onPress={()=>search()} disabled={loading} activeOpacity={0.8}
+                style={{ backgroundColor:C.red, paddingHorizontal:14, paddingVertical:10,
+                  borderRadius:6, opacity: loading ? 0.6 : 1 }}>
+                <Txt style={{ fontSize:9, fontFamily:F.semi, color:'#fff', letterSpacing:1,
+                  textTransform:'uppercase' }}>Search</Txt>
+              </TouchableOpacity>
+            </View>
+
+            {/* Results */}
+            <ScrollView keyboardShouldPersistTaps="always" style={{ flex:1 }}>
+              {loading && (
+                <View style={{ padding:32, alignItems:'center' }}>
+                  <ActivityIndicator color={C.red} size="large"/>
+                  <Cap style={{ marginTop:12 }}>Searching YouTube…</Cap>
+                </View>
+              )}
+              {error ? (
+                <View style={{ padding:16, margin:12, borderWidth:1,
+                  borderColor:`${C.red}44`, backgroundColor:`${C.red}10`, borderRadius:8 }}>
+                  <Txt style={{ fontSize:12, color:C.red, lineHeight:18 }}>{error}</Txt>
+                </View>
+              ) : null}
+              {!loading && results.map(item => {
+                const vid = item.id?.videoId;
+                const snip = item.snippet;
+                const thumb = snip?.thumbnails?.medium?.url || snip?.thumbnails?.default?.url;
+                const ytUrl = `https://www.youtube.com/watch?v=${vid}`;
+                return (
+                  <TouchableOpacity key={vid} onPress={()=>{ onSelect(ytUrl); onClose(); }}
+                    activeOpacity={0.75}
+                    style={{ flexDirection:'row', alignItems:'center', gap:12, padding:12,
+                      borderBottomWidth:1, borderBottomColor:C.faint }}>
+                    {/* Thumbnail */}
+                    <View style={{ width:100, height:60, borderRadius:6, overflow:'hidden',
+                      backgroundColor:C.faint, position:'relative' }}>
+                      {thumb && <Image source={{ uri: thumb }} style={{ width:100, height:60 }} resizeMode="cover"/>}
+                      <View style={{ position:'absolute', inset:0, top:0, left:0, right:0, bottom:0,
+                        alignItems:'center', justifyContent:'center' }}>
+                        <View style={{ width:26, height:26, borderRadius:13,
+                          backgroundColor:'rgba(255,0,0,0.85)', alignItems:'center', justifyContent:'center' }}>
+                          <Txt style={{ color:'#fff', fontSize:10, marginLeft:2 }}>▶</Txt>
+                        </View>
+                      </View>
+                    </View>
+                    {/* Info */}
+                    <View style={{ flex:1 }}>
+                      <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text, lineHeight:17 }}
+                        numberOfLines={2}>{snip?.title}</Txt>
+                      <Cap style={{ fontSize:8, marginTop:3, color:C.muted }}
+                        numberOfLines={1}>{snip?.channelTitle}</Cap>
+                    </View>
+                    {/* Attach */}
+                    <View style={{ backgroundColor:C.teal, paddingHorizontal:8, paddingVertical:6,
+                      borderRadius:4 }}>
+                      <Txt style={{ fontSize:9, fontFamily:F.semi, color:'#fff', letterSpacing:1,
+                        textTransform:'uppercase' }}>Attach</Txt>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              {!loading && !error && results.length === 0 && query.trim() && (
+                <View style={{ padding:32, alignItems:'center' }}>
+                  <Cap style={{ textAlign:'center' }}>No results. Try a different search term.</Cap>
+                </View>
+              )}
+              {!loading && !error && results.length === 0 && !query.trim() && (
+                <View style={{ padding:32, alignItems:'center' }}>
+                  <Txt style={{ fontSize:22, marginBottom:12 }}>🔍</Txt>
+                  <Cap style={{ textAlign:'center' }}>Search for a BJJ technique to find reference videos</Cap>
+                </View>
+              )}
+              <View style={{ height:20 }}/>
+            </ScrollView>
+
+            {/* Paste URL fallback */}
+            <View style={{ padding:12, borderTopWidth:1, borderTopColor:C.border,
+              backgroundColor:C.faint }}>
+              <Cap style={{ textAlign:'center', color:C.muted, fontSize:9 }}>
+                Or paste a YouTube URL directly in the technique field
+              </Cap>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
 const getYouTubeId = url => {
   if (!url) return null;
   const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
@@ -2660,12 +2813,13 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
   // New entry form state
   const [sessionType,  setSessionType]  = useState('class');
   const [date,         setDate]         = useState(today);
-  const [techniques,   setTechniques]   = useState([{ name:'', outcome:'learned', notes:'' }]);
+  const [techniques,   setTechniques]   = useState([{ name:'', outcome:'learned', notes:'', url:'' }]);
   const [sessionNotes, setSessionNotes] = useState('');
   const [saving,       setSaving]       = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [viewMode,     setViewMode]     = useState('entries');
   const [techSearch,   setTechSearch]   = useState('');
+  const [ytSearchIdx,  setYtSearchIdx]  = useState(null);
   const [importingLog, setImportingLog] = useState(null); // class_log being imported
   const [importTechs,  setImportTechs]  = useState([]);   // techniques with outcomes
   const [importExtra,  setImportExtra]  = useState([]);   // athlete's own additions
@@ -2705,12 +2859,12 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
     .filter(([,v]) => v.learned >= 2 && !v.attempted && !v.finished)
     .slice(0, 3);
 
-  const addTechRow = () => setTechniques(ts => [...ts, { name:'', outcome:'learned', notes:'' }]);
+  const addTechRow = () => setTechniques(ts => [...ts, { name:'', outcome:'learned', notes:'', url:'' }]);
   const removeTechRow = i => setTechniques(ts => ts.filter((_,idx)=>idx!==i));
   const updateTech = (i, field, val) => setTechniques(ts => ts.map((t,idx)=>idx===i?{...t,[field]:val}:t));
 
   const resetForm = () => {
-    setTechniques([{ name:'', outcome:'learned', notes:'' }]);
+    setTechniques([{ name:'', outcome:'learned', notes:'', url:'' }]);
     setSessionNotes(''); setSessionType('class'); setDate(today);
     setEditingEntry(null);
   };
@@ -3095,9 +3249,34 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                 placeholder="Note (optional)…"
                 placeholderTextColor={C.muted}
                 style={{ borderWidth:1, borderColor:C.border, color:C.text, fontSize:11,
-                  fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
+                  fontFamily:F.body, padding:8, backgroundColor:C.card, marginBottom:6 }}/>
+              {/* URL + YouTube search */}
+              <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+                <TextInput
+                  value={tech.url||''}
+                  onChangeText={v=>updateTech(i,'url',v)}
+                  placeholder="Paste URL or search YouTube…"
+                  placeholderTextColor={C.muted}
+                  autoCapitalize="none" keyboardType="url"
+                  style={{ flex:1, borderWidth:1,
+                    borderColor:tech.url?`${C.red}44`:C.border,
+                    color:tech.url?C.teal:C.text, fontSize:10,
+                    fontFamily:F.body, padding:7, backgroundColor:C.card }}/>
+                <TouchableOpacity onPress={()=>setYtSearchIdx(i)} activeOpacity={0.75}
+                  style={{ backgroundColor:'#cc0000', paddingHorizontal:8, paddingVertical:7,
+                    borderRadius:4 }}>
+                  <Txt style={{ fontSize:10 }}>▶</Txt>
+                </TouchableOpacity>
+                </View>
             </View>
           ))}
+
+          {/* YouTube search modal for journal techniques */}
+          <YouTubeSearchModal
+            visible={ytSearchIdx !== null}
+            initialQuery={ytSearchIdx !== null ? techniques[ytSearchIdx]?.name || '' : ''}
+            onClose={()=>setYtSearchIdx(null)}
+            onSelect={url=>{ if(ytSearchIdx!==null){ updateTech(ytSearchIdx,'url',url); setYtSearchIdx(null); } }}/>
 
           {/* Add technique row */}
           <TouchableOpacity onPress={addTechRow} activeOpacity={0.75}
@@ -4803,6 +4982,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   const [classLogType,    setClassLogType]     = useState('class');
   const [classLogNotes,   setClassLogNotes]    = useState('');
   const [classLogSaving,  setClassLogSaving]   = useState(false);
+  const [ytSearchIndex,   setYtSearchIndex]    = useState(null); // which tech row is searching
   const [newAthleteLast,    setNewAthleteLast]     = useState('');
   const [newAthleteEmail,   setNewAthleteEmail]    = useState('');
   const [newAthleteAcademy, setNewAthleteAcademy] = useState('');
@@ -5664,6 +5844,11 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
       )}
 
       {/* ── Log Class Modal ── */}
+      <YouTubeSearchModal
+        visible={ytSearchIndex !== null}
+        initialQuery={ytSearchIndex !== null ? classLogTechs[ytSearchIndex]?.name || '' : ''}
+        onClose={()=>setYtSearchIndex(null)}
+        onSelect={url=>{ if(ytSearchIndex!==null) setClassLogTechs(ts=>ts.map((t,idx)=>idx===ytSearchIndex?{...t,url}:t)); }}/>
       <Modal visible={showClassLog} transparent animationType="slide" onRequestClose={()=>setShowClassLog(false)}>
         <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
           <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.97)',
@@ -5727,13 +5912,18 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                       <Txt style={{ fontSize:14 }}>{isYT ? '▶️' : '🔗'}</Txt>
                       <TextInput value={tech.url||''}
                         onChangeText={v=>setClassLogTechs(ts=>ts.map((t,idx)=>idx===i?{...t,url:v}:t))}
-                        placeholder="Paste YouTube or any URL (optional)…"
+                        placeholder="Paste URL or search YouTube…"
                         placeholderTextColor={C.muted}
                         autoCapitalize="none" keyboardType="url"
                         style={{ flex:1, borderWidth:1,
                           borderColor:tech.url?`${C.teal}55`:C.border,
                           color:tech.url?C.teal:C.text, fontSize:11,
                           fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
+                      <TouchableOpacity onPress={()=>setYtSearchIndex(i)} activeOpacity={0.75}
+                        style={{ backgroundColor:'#ff0000', paddingHorizontal:8, paddingVertical:8,
+                          borderRadius:4 }}>
+                        <Txt style={{ fontSize:10 }}>▶</Txt>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 );
