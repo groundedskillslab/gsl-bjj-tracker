@@ -330,8 +330,12 @@ const db = {
     if (error) throw error;
     return data;
   },
-  async deleteClassLog(id) {
-    await supabase.from('class_logs').delete().eq('id', id);
+  async updateClassLog(id, updates) {
+    const { error } = await supabase.from('class_logs').update({
+      date: updates.date, session_type: updates.sessionType,
+      techniques: updates.techniques, notes: updates.notes,
+    }).eq('id', id);
+    if (error) throw error;
   },
   async getJournalEntries(athleteId) {
     const { data } = await supabase.from('journal_entries').select('*')
@@ -2437,37 +2441,71 @@ const getYouTubeId = url => {
   return m ? m[1] : null;
 };
 
-const isYouTubeUrl = url => !!getYouTubeId(url);
-
 function TechVideoRef({ url }) {
+  const [expanded, setExpanded] = useState(false);
   if (!url?.trim()) return null;
   const ytId = getYouTubeId(url);
+
   const openUrl = () => {
     if (typeof window !== 'undefined') window.open(url, '_blank');
   };
+
   if (ytId) {
     const thumb = `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`;
+    const embedUrl = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1`;
+
+    if (expanded && Platform.OS === 'web') {
+      // Inline embed via iframe on web
+      return (
+        <View style={{ marginTop:8, borderRadius:8, overflow:'hidden',
+          borderWidth:1, borderColor:`${C.red}33` }}>
+          <iframe
+            src={embedUrl}
+            width="100%"
+            height="200"
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title="YouTube video"
+            style={{ display:'block', border:'none' }}
+          />
+          <TouchableOpacity onPress={()=>setExpanded(false)} activeOpacity={0.75}
+            style={{ backgroundColor:'rgba(0,0,0,0.7)', padding:6, alignItems:'center' }}>
+            <Cap style={{ color:'#ccc', fontSize:8 }}>▲ Close video</Cap>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Thumbnail with play button — tap to expand
     return (
-      <TouchableOpacity onPress={openUrl} activeOpacity={0.8}
+      <TouchableOpacity onPress={()=>{ if(Platform.OS==='web') setExpanded(true); else openUrl(); }}
+        activeOpacity={0.8}
         style={{ marginTop:8, borderRadius:8, overflow:'hidden',
           borderWidth:1, borderColor:`${C.red}33` }}>
         <Image source={{ uri: thumb }}
           style={{ width:'100%', height:120 }}
-          resizeMode="cover"
-          defaultSource={{ uri: `https://img.youtube.com/vi/${ytId}/default.jpg` }}/>
-        <View style={{ position:'absolute', inset:0, top:0, left:0, right:0, bottom:0,
+          resizeMode="cover"/>
+        <View style={{ position:'absolute', top:0, left:0, right:0, height:120,
           alignItems:'center', justifyContent:'center' }}>
-          <View style={{ width:40, height:40, borderRadius:20,
-            backgroundColor:'rgba(255,0,0,0.85)', alignItems:'center', justifyContent:'center' }}>
-            <Txt style={{ color:'#fff', fontSize:16, marginLeft:3 }}>▶</Txt>
+          <View style={{ width:44, height:44, borderRadius:22,
+            backgroundColor:'rgba(255,0,0,0.88)', alignItems:'center', justifyContent:'center' }}>
+            <Txt style={{ color:'#fff', fontSize:18, marginLeft:3 }}>▶</Txt>
           </View>
         </View>
-        <View style={{ backgroundColor:'rgba(0,0,0,0.7)', padding:6 }}>
-          <Cap style={{ color:'#ccc', fontSize:8 }}>▶ Tap to watch on YouTube</Cap>
+        <View style={{ backgroundColor:'rgba(0,0,0,0.7)', padding:6, flexDirection:'row',
+          alignItems:'center', gap:6 }}>
+          <Txt style={{ fontSize:10, color:'#fff' }}>▶</Txt>
+          <Cap style={{ color:'#ccc', fontSize:8, flex:1 }}>Tap to watch inline</Cap>
+          <TouchableOpacity onPress={e=>{ e.stopPropagation?.(); openUrl(); }} activeOpacity={0.75}>
+            <Cap style={{ color:'#aaa', fontSize:8 }}>↗ YouTube</Cap>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
   }
+
+  // Non-YouTube URL — open in browser
   return (
     <TouchableOpacity onPress={openUrl} activeOpacity={0.75}
       style={{ marginTop:8, flexDirection:'row', alignItems:'center', gap:6,
@@ -4717,6 +4755,12 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
             .select('user_id, role, academy_id');
           setAllUsers(users || []);
         }
+        // Load class logs for this coach/admin
+        const myRole = (await supabase.from('user_roles').select('academy_id').eq('user_id', session?.user?.id).maybeSingle()).data;
+        if (myRole?.academy_id) {
+          const logs = await db.getClassLogs(myRole.academy_id);
+          setCoachClassLogs(logs);
+        }
       } catch(e) { console.error(e); }
       setLoading(false);
     })();
@@ -4752,6 +4796,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   })();
 
   const [showClassLog,    setShowClassLog]    = useState(false);
+  const [editingClassLog, setEditingClassLog] = useState(null);
+  const [coachClassLogs,  setCoachClassLogs]  = useState([]);
   const [classLogTechs,   setClassLogTechs]   = useState([{ name:'', notes:'', url:'' }]);
   const [classLogDate,    setClassLogDate]     = useState(new Date().toISOString().split('T')[0]);
   const [classLogType,    setClassLogType]     = useState('class');
@@ -4829,20 +4875,48 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
     const validTechs = classLogTechs.filter(t => t.name.trim());
     if (!validTechs.length) return;
     const myAcademyId = allUsers.find(u => u.user_id === session.user.id)?.academy_id;
-    if (!myAcademyId) { setManageMsg('❌ No academy assigned to your account.'); return; }
+    if (!myAcademyId && !editingClassLog) { setManageMsg('❌ No academy assigned to your account.'); return; }
     setClassLogSaving(true);
     try {
-      await db.createClassLog({
-        coachId: session.user.id, academyId: myAcademyId,
-        date: classLogDate, sessionType: classLogType,
-        techniques: validTechs, notes: classLogNotes,
-      });
+      if (editingClassLog) {
+        // Update existing
+        await db.updateClassLog(editingClassLog.id, {
+          date: classLogDate, sessionType: classLogType,
+          techniques: validTechs, notes: classLogNotes,
+        });
+        setCoachClassLogs(prev => prev.map(cl =>
+          cl.id === editingClassLog.id
+            ? { ...cl, date: classLogDate, session_type: classLogType, techniques: validTechs, notes: classLogNotes }
+            : cl
+        ));
+        setManageMsg('✓ Class log updated.');
+      } else {
+        // Create new
+        const newLog = await db.createClassLog({
+          coachId: session.user.id, academyId: myAcademyId,
+          date: classLogDate, sessionType: classLogType,
+          techniques: validTechs, notes: classLogNotes,
+        });
+        setCoachClassLogs(prev => [newLog, ...prev]);
+        setManageMsg('✓ Class log published to athletes.');
+      }
       setShowClassLog(false);
+      setEditingClassLog(null);
       setClassLogTechs([{ name:'', notes:'', url:'' }]);
-      setClassLogNotes(''); setClassLogDate(new Date().toISOString().split('T')[0]);
-      setManageMsg('✓ Class log published to athletes.');
+      setClassLogNotes('');
+      setClassLogDate(new Date().toISOString().split('T')[0]);
+      setClassLogType('class');
     } catch(e) { setManageMsg('❌ ' + (e.message || 'Failed to save')); }
     setClassLogSaving(false);
+  };
+
+  const startEditClassLog = (cl) => {
+    setEditingClassLog(cl);
+    setClassLogDate(cl.date);
+    setClassLogType(cl.session_type);
+    setClassLogTechs(cl.techniques?.length ? cl.techniques.map(t=>({name:t.name||'',notes:t.notes||'',url:t.url||''})) : [{ name:'', notes:'', url:'' }]);
+    setClassLogNotes(cl.notes || '');
+    setShowClassLog(true);
   };
 
   const assignCoach = async (athleteUserId, athleteName) => {
@@ -5109,7 +5183,64 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
             </View>
           ) : null}
 
-          {/* Academies */}
+          {/* Published Class Logs */}
+          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
+            <View style={{ flexDirection:'row', alignItems:'center', padding:14,
+              borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
+              <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
+              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2,
+                textTransform:'uppercase', color:C.textDim, flex:1 }}>Published Class Logs</Txt>
+              <TouchableOpacity onPress={()=>setShowClassLog(true)} activeOpacity={0.75}
+                style={{ borderWidth:1, borderColor:`${C.teal}55`, backgroundColor:`${C.teal}15`,
+                  paddingHorizontal:8, paddingVertical:4 }}>
+                <Txt style={{ fontSize:8, fontFamily:F.semi, color:C.teal, letterSpacing:1,
+                  textTransform:'uppercase' }}>+ New</Txt>
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding:14 }}>
+              {coachClassLogs.length === 0 ? (
+                <Cap style={{ textAlign:'center', color:C.muted }}>No class logs yet. Tap + New to publish one.</Cap>
+              ) : coachClassLogs.map(cl => {
+                const st = SESSION_TYPES.find(s=>s.key===cl.session_type)||SESSION_TYPES[0];
+                const techNames = (cl.techniques||[]).map(t=>t.name).filter(Boolean);
+                return (
+                  <View key={cl.id} style={{ borderWidth:1, borderColor:C.border,
+                    marginBottom:10, borderRadius:6, overflow:'hidden' }}>
+                    <View style={{ flexDirection:'row', alignItems:'center', padding:10,
+                      backgroundColor:C.faint, borderBottomWidth:1, borderBottomColor:C.faint }}>
+                      <Txt style={{ fontSize:13, marginRight:6 }}>{st.icon}</Txt>
+                      <View style={{ flex:1 }}>
+                        <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>
+                          {st.label} · {cl.date}
+                        </Txt>
+                        <Cap style={{ fontSize:7, marginTop:2 }}>
+                          {techNames.slice(0,3).join(', ')}{techNames.length>3?` +${techNames.length-3} more`:''}
+                        </Cap>
+                      </View>
+                      <TouchableOpacity onPress={()=>startEditClassLog(cl)} activeOpacity={0.75}
+                        style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:`${C.gold}10`,
+                          paddingHorizontal:8, paddingVertical:4, marginRight:6, borderRadius:4 }}>
+                        <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.gold }}>✎ Edit</Txt>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={async()=>{
+                        await db.deleteClassLog(cl.id);
+                        setCoachClassLogs(prev=>prev.filter(c=>c.id!==cl.id));
+                      }} activeOpacity={0.75}
+                        style={{ borderWidth:1, borderColor:`${C.red}44`, backgroundColor:`${C.red}10`,
+                          paddingHorizontal:8, paddingVertical:4, borderRadius:4 }}>
+                        <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.red }}>✕</Txt>
+                      </TouchableOpacity>
+                    </View>
+                    {cl.notes ? (
+                      <View style={{ padding:10 }}>
+                        <Txt style={{ fontSize:11, color:C.textDim, fontStyle:'italic' }}>"{cl.notes}"</Txt>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
           <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
             <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
               <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
@@ -5542,8 +5673,10 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
               width:'100%', maxWidth:420, padding:20 }}>
               <View style={{ flexDirection:'row', alignItems:'center', marginBottom:16 }}>
                 <View style={{ width:3, height:16, backgroundColor:C.teal, marginRight:10 }}/>
-                <Txt style={{ fontSize:16, fontFamily:F.bold, flex:1 }}>Log Class</Txt>
-                <TouchableOpacity onPress={()=>setShowClassLog(false)} activeOpacity={0.75}>
+                <Txt style={{ fontSize:16, fontFamily:F.bold, flex:1 }}>
+                  {editingClassLog ? 'Edit Class Log' : 'Log Class'}
+                </Txt>
+                <TouchableOpacity onPress={()=>{ setShowClassLog(false); setEditingClassLog(null); }} activeOpacity={0.75}>
                   <Txt style={{ color:C.muted, fontSize:20 }}>✕</Txt>
                 </TouchableOpacity>
               </View>
@@ -5624,7 +5757,9 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 {classLogSaving
                   ? <ActivityIndicator color="#fff"/>
                   : <Txt style={{ fontSize:10, fontFamily:F.semi, letterSpacing:1.5,
-                      textTransform:'uppercase', color:'#fff' }}>Publish to Academy</Txt>}
+                      textTransform:'uppercase', color:'#fff' }}>
+                      {editingClassLog ? 'Save Changes' : 'Publish to Academy'}
+                    </Txt>}
               </TouchableOpacity>
             </View>
           </ScrollView>
