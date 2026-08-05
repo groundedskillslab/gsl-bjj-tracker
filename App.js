@@ -3431,7 +3431,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
 
       {/* ── BY TECHNIQUE VIEW ── */}
       {journal.length > 0 && viewMode === 'techniques' && (()=>{
-        // Build technique index: { name -> [{date, sessionType, outcome, note, sessionNote}] }
+        // Build technique index
         const techIndex = {};
         journal.forEach(entry => {
           (entry.techniques||[]).forEach(t => {
@@ -3443,11 +3443,11 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
               outcome: t.outcome,
               techNote: t.notes || '',
               sessionNote: entry.notes || '',
+              url: t.url || '',
             });
           });
         });
 
-        // Sort techniques by most recently logged
         const sorted = Object.entries(techIndex)
           .sort((a,b) => b[1][0].date.localeCompare(a[1][0].date));
 
@@ -3461,7 +3461,6 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
               </Txt>
             </View>
 
-            {/* Search filter */}
             <TextInput
               value={techSearch} onChangeText={setTechSearch}
               placeholder="Search techniques…" placeholderTextColor={C.muted}
@@ -3479,6 +3478,8 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                 const allNotes = appearances
                   .filter(a=>a.techNote||a.sessionNote)
                   .map(a=>({ date:a.date, note:a.techNote||a.sessionNote, sessionType:a.sessionType }));
+                // Most recent video URL for this technique
+                const videoUrl = appearances.find(a=>a.url)?.url || null;
 
                 return (
                   <View key={name} style={{ borderWidth:1, borderColor:C.border,
@@ -3537,6 +3538,14 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                             </View>
                           );
                         })}
+                      </View>
+                    )}
+
+                    {/* Video reference */}
+                    {videoUrl && (
+                      <View style={{ padding:12, borderTopWidth:1, borderTopColor:C.faint }}>
+                        <Cap style={{ marginBottom:6, color:C.muted }}>Reference video</Cap>
+                        <TechVideoRef url={videoUrl}/>
                       </View>
                     )}
                   </View>
