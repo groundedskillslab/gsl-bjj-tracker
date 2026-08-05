@@ -297,16 +297,24 @@ const db = {
   },
 
   // ── User Settings ─────────────────────────────────────────────────────────────
-  async getTutorialDone(userId) {
+  async getUserSettings(userId) {
     const { data } = await supabase.from('user_settings')
-      .select('tutorial_done').eq('user_id', userId).maybeSingle();
-    return data?.tutorial_done || false;
+      .select('tutorial_done, skipped_logs').eq('user_id', userId).maybeSingle();
+    return data || { tutorial_done: false, skipped_logs: [] };
   },
   async setTutorialDone(userId) {
     const { error } = await supabase.from('user_settings')
       .upsert({ user_id: userId, tutorial_done: true, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' });
     if (error) console.error('setTutorialDone error:', error.message);
+  },
+  async skipClassLog(userId, logId, currentSkipped=[]) {
+    const updated = [...new Set([...currentSkipped, logId])];
+    const { error } = await supabase.from('user_settings')
+      .upsert({ user_id: userId, skipped_logs: updated, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' });
+    if (error) console.error('skipClassLog error:', error.message);
+    return updated;
   },
   async getClassLogs(academyId) {
     const { data } = await supabase.from('class_logs').select('*')
@@ -2556,7 +2564,7 @@ const OUTCOMES = [
   { key:'finished',  label:'Finished', color:'#993C1D', bg:'#FAECE7' },
 ];
 
-function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLogs=[], onLogDay }) {
+function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLogs=[], skippedLogIds=new Set(), onLogDay, onSkipLog }) {
   const today = new Date().toISOString().split('T')[0];
 
   // New entry form state
@@ -2576,7 +2584,9 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
   // Already-imported class log IDs
   const importedLogIds = new Set(journal.filter(e=>e.classLogId).map(e=>e.classLogId));
 
-  const pendingLogs = classLogs.filter(cl => !importedLogIds.has(cl.id));
+  const pendingLogs = classLogs.filter(cl =>
+    !importedLogIds.has(cl.id) && !skippedLogIds.has(cl.id)
+  );
 
   // Derived stats
   const allTechs = journal.flatMap(e => e.techniques || []);
@@ -2853,6 +2863,13 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                       <Txt style={{ fontSize:9, fontFamily:F.semi, color:'#fff', letterSpacing:1,
                         textTransform:'uppercase' }}>Import to journal</Txt>
                     </TouchableOpacity>
+                    {onSkipLog && (
+                      <TouchableOpacity onPress={()=>onSkipLog(cl.id)} activeOpacity={0.75}
+                        style={{ alignSelf:'flex-start', borderWidth:1, borderColor:C.border,
+                          paddingHorizontal:10, paddingVertical:6, borderRadius:4, marginTop:6 }}>
+                        <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.muted }}>Didn't attend</Txt>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               </View>
@@ -5819,7 +5836,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [trainingDays, setTrainingDays] = useState([]);
   const [journal,         setJournal]         = useState([]);
   const [classLogs,       setClassLogs]       = useState([]);
-  const [dismissedBanner, setDismissedBanner] = useState(false);
+  const [skippedLogIds,   setSkippedLogIds]   = useState(new Set());
   const [showTutorial,    setShowTutorial]    = useState(false);
   const [showProfiles, setShowProfiles] = useState(false);
 
@@ -5876,13 +5893,15 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
         if (ath.academy_id) {
           const logs = await db.getClassLogs(ath.academy_id);
           setClassLogs(logs);
-          setDismissedBanner(false);
         }
 
-        // Show tutorial for first-time users (not when impersonating)
+        // Load user settings (tutorial + skipped logs)
         if (!impersonatedAthlete && session?.user) {
-          const done = await db.getTutorialDone(session.user.id);
-          if (!done) setShowTutorial(true);
+          const settings = await db.getUserSettings(session.user.id);
+          if (!settings.tutorial_done) setShowTutorial(true);
+          if (settings.skipped_logs?.length) {
+            setSkippedLogIds(new Set(settings.skipped_logs));
+          }
         }
       } catch (e) { console.error('Load error:', e); }
       setLoading(false);
@@ -6169,10 +6188,11 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           <View style={{ flexDirection:'row', backgroundColor:C.surface, borderTopWidth:1, borderTopColor:C.border }}>
             {TABS.map(({ key, label, icon }) => {
               const isPending = key === 'Journal' && classLogs.filter(cl =>
-                !journal.some(e => e.classLogId === cl.id)
+                !journal.some(e => e.classLogId === cl.id) &&
+                !skippedLogIds.has(cl.id)
               ).length > 0;
               return (
-                <TouchableOpacity key={key} onPress={()=>{ setTab(key); if(key==='Journal') setDismissedBanner(false); }} activeOpacity={0.75}
+                <TouchableOpacity key={key} onPress={()=>setTab(key)} activeOpacity={0.75}
                   style={{ flex:1, paddingVertical:9, alignItems:'center',
                     borderTopWidth:2, borderTopColor:tab===key?C.gold:'transparent',
                     backgroundColor:tab===key?C.goldDim:'transparent' }}>
@@ -6194,9 +6214,13 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
 
       {/* ── Screens ── */}
 
-      {/* Pending class log reminder banner — shown on all tabs except Journal */}
-      {!dismissedBanner && tab !== 'Journal' && classLogs.filter(cl => !journal.some(e => e.classLogId === cl.id)).length > 0 && (() => {
-        const pending = classLogs.filter(cl => !journal.some(e => e.classLogId === cl.id));
+      {/* Pending class log reminder banner — shown on Track/Charts/Rolls/Comps only */}
+      {tab !== 'Journal' && tab !== 'Profiles' && (() => {
+        const pending = classLogs.filter(cl =>
+          !journal.some(e => e.classLogId === cl.id) &&
+          !skippedLogIds.has(cl.id)
+        );
+        if (!pending.length) return null;
         const latest = pending[0];
         const st = SESSION_TYPES.find(s => s.key === latest.session_type) || SESSION_TYPES[0];
         return (
@@ -6209,13 +6233,27 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
                   ? `New class log — ${latest.date}`
                   : `${pending.length} unimported class logs`}
               </Txt>
-              <Cap style={{ fontSize:8, color:C.teal, marginTop:2 }}>
-                Tap to open Journal and import
-              </Cap>
+              <Cap style={{ fontSize:8, color:C.teal, marginTop:2 }}>Tap to open Journal and import</Cap>
             </TouchableOpacity>
-            <TouchableOpacity onPress={()=>setDismissedBanner(true)} activeOpacity={0.75}
-              style={{ padding:6 }}>
-              <Txt style={{ color:C.teal, fontSize:16 }}>✕</Txt>
+            {/* Didn't attend — permanently skips this log */}
+            <TouchableOpacity onPress={async () => {
+              const updated = await db.skipClassLog(
+                session.user.id, latest.id, [...skippedLogIds]
+              );
+              setSkippedLogIds(new Set(updated));
+            }} activeOpacity={0.75}
+              style={{ borderWidth:1, borderColor:`${C.muted}44`, paddingHorizontal:8, paddingVertical:5,
+                borderRadius:4 }}>
+              <Txt style={{ fontSize:8, fontFamily:F.semi, color:C.muted }}>Didn't attend</Txt>
+            </TouchableOpacity>
+            {/* Dismiss for this session */}
+            <TouchableOpacity onPress={async () => {
+              const updated = await db.skipClassLog(
+                session.user.id, latest.id, [...skippedLogIds]
+              );
+              setSkippedLogIds(new Set(updated));
+            }} activeOpacity={0.75} style={{ padding:4 }}>
+              <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
             </TouchableOpacity>
           </View>
         );
@@ -6232,7 +6270,12 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           journal={journal} setJournal={setJournal}
           athlete={athlete}
           classLogs={classLogs}
+          skippedLogIds={skippedLogIds}
           onLogDay={logDay}
+          onSkipLog={async (logId) => {
+            const updated = await db.skipClassLog(session.user.id, logId, [...skippedLogIds]);
+            setSkippedLogIds(new Set(updated));
+          }}
           allTechniques={[...submissions,...sweeps,...positions,...transitions,...guardPulls,...takedowns]}/>
       )}
       {tab==='Charts' && (
