@@ -2430,6 +2430,58 @@ function generateInsights(rolls, takedowns, sweeps, transitions, positions, comp
   return insights;
 }
 
+// ─── Video/URL helpers ────────────────────────────────────────────────────────
+const getYouTubeId = url => {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+};
+
+const isYouTubeUrl = url => !!getYouTubeId(url);
+
+function TechVideoRef({ url }) {
+  if (!url?.trim()) return null;
+  const ytId = getYouTubeId(url);
+  const openUrl = () => {
+    if (typeof window !== 'undefined') window.open(url, '_blank');
+  };
+  if (ytId) {
+    const thumb = `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`;
+    return (
+      <TouchableOpacity onPress={openUrl} activeOpacity={0.8}
+        style={{ marginTop:8, borderRadius:8, overflow:'hidden',
+          borderWidth:1, borderColor:`${C.red}33` }}>
+        <Image source={{ uri: thumb }}
+          style={{ width:'100%', height:120 }}
+          resizeMode="cover"
+          defaultSource={{ uri: `https://img.youtube.com/vi/${ytId}/default.jpg` }}/>
+        <View style={{ position:'absolute', inset:0, top:0, left:0, right:0, bottom:0,
+          alignItems:'center', justifyContent:'center' }}>
+          <View style={{ width:40, height:40, borderRadius:20,
+            backgroundColor:'rgba(255,0,0,0.85)', alignItems:'center', justifyContent:'center' }}>
+            <Txt style={{ color:'#fff', fontSize:16, marginLeft:3 }}>▶</Txt>
+          </View>
+        </View>
+        <View style={{ backgroundColor:'rgba(0,0,0,0.7)', padding:6 }}>
+          <Cap style={{ color:'#ccc', fontSize:8 }}>▶ Tap to watch on YouTube</Cap>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <TouchableOpacity onPress={openUrl} activeOpacity={0.75}
+      style={{ marginTop:8, flexDirection:'row', alignItems:'center', gap:6,
+        borderWidth:1, borderColor:`${C.teal}44`, backgroundColor:`${C.teal}10`,
+        padding:8, borderRadius:6 }}>
+      <Txt style={{ fontSize:14 }}>🔗</Txt>
+      <Txt style={{ fontSize:11, color:C.teal, fontFamily:F.semi, flex:1 }} numberOfLines={1}>
+        {url.replace(/^https?:\/\//, '')}
+      </Txt>
+      <Txt style={{ fontSize:11, color:C.teal }}>→</Txt>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Tutorial Overlay ─────────────────────────────────────────────────────────
 const TUTORIAL_STEPS = [
   {
@@ -2761,8 +2813,9 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                     <View key={i} style={{ padding:10, borderBottomWidth:i<importTechs.length-1?1:0,
                       borderBottomColor:C.faint }}>
                       <Txt style={{ fontSize:13, fontFamily:F.semi, marginBottom:2 }}>{tech.name}</Txt>
-                      {tech.notes ? <Cap style={{ fontSize:8, marginBottom:6, color:C.muted }}>{tech.notes}</Cap> : null}
-                      <View style={{ flexDirection:'row', gap:6 }}>
+                      {tech.notes ? <Cap style={{ fontSize:8, marginBottom:4, color:C.muted }}>{tech.notes}</Cap> : null}
+                      <TechVideoRef url={tech.url}/>
+                      <View style={{ flexDirection:'row', gap:6, marginTop:8 }}>
                         {OUTCOMES.map(o => {
                           const active = tech.outcome === o.key;
                           return (
@@ -3133,7 +3186,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                   </TouchableOpacity>
                 </View>
                 <View style={{ padding:12 }}>
-                  <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6, marginBottom:entry.notes?8:0 }}>
+                  <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6, marginBottom:8 }}>
                     {(entry.techniques||[]).map((t,i)=>{
                       const o = OUTCOMES.find(o=>o.key===t.outcome)||OUTCOMES[0];
                       return (
@@ -3144,12 +3197,20 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                             {o.label==='Learned'?'📖':o.label==='Tried'?'⚡':'✅'}
                           </Txt>
                           <Txt style={{ fontSize:11, color:o.color, fontFamily:F.medium }}>{t.name}</Txt>
+                          {t.url ? <Txt style={{ fontSize:10, color:o.color }}>🔗</Txt> : null}
                         </View>
                       );
                     })}
                   </View>
+                  {/* Video refs for techniques that have URLs */}
+                  {(entry.techniques||[]).filter(t=>t.url).map((t,i)=>(
+                    <View key={i} style={{ marginBottom:6 }}>
+                      <Cap style={{ fontSize:8, color:C.muted, marginBottom:4 }}>{t.name}</Cap>
+                      <TechVideoRef url={t.url}/>
+                    </View>
+                  ))}
                   {entry.notes ? (
-                    <Txt style={{ fontSize:11, color:C.textDim, fontStyle:'italic', lineHeight:16 }}>
+                    <Txt style={{ fontSize:11, color:C.textDim, fontStyle:'italic', lineHeight:16, marginTop:4 }}>
                       "{entry.notes}"
                     </Txt>
                   ) : null}
@@ -4691,7 +4752,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   })();
 
   const [showClassLog,    setShowClassLog]    = useState(false);
-  const [classLogTechs,   setClassLogTechs]   = useState([{ name:'', notes:'' }]);
+  const [classLogTechs,   setClassLogTechs]   = useState([{ name:'', notes:'', url:'' }]);
   const [classLogDate,    setClassLogDate]     = useState(new Date().toISOString().split('T')[0]);
   const [classLogType,    setClassLogType]     = useState('class');
   const [classLogNotes,   setClassLogNotes]    = useState('');
@@ -4777,7 +4838,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
         techniques: validTechs, notes: classLogNotes,
       });
       setShowClassLog(false);
-      setClassLogTechs([{ name:'', notes:'' }]);
+      setClassLogTechs([{ name:'', notes:'', url:'' }]);
       setClassLogNotes(''); setClassLogDate(new Date().toISOString().split('T')[0]);
       setManageMsg('✓ Class log published to athletes.');
     } catch(e) { setManageMsg('❌ ' + (e.message || 'Failed to save')); }
@@ -5506,29 +5567,45 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                 </View>
               </ScrollView>
               <Cap style={{ marginBottom:8 }}>Techniques covered</Cap>
-              {classLogTechs.map((tech, i) => (
-                <View key={i} style={{ marginBottom:8, padding:10, borderWidth:1,
-                  borderColor:C.faint, backgroundColor:C.faint }}>
-                  <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:6 }}>
-                    <TextInput value={tech.name}
-                      onChangeText={v=>setClassLogTechs(ts=>ts.map((t,idx)=>idx===i?{...t,name:v}:t))}
-                      placeholder="Technique name…" placeholderTextColor={C.muted}
-                      style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
-                        fontSize:13, fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
-                    {classLogTechs.length > 1 && (
-                      <TouchableOpacity onPress={()=>setClassLogTechs(ts=>ts.filter((_,idx)=>idx!==i))} activeOpacity={0.75}>
-                        <Txt style={{ color:C.muted, fontSize:18 }}>✕</Txt>
-                      </TouchableOpacity>
-                    )}
+              {classLogTechs.map((tech, i) => {
+                const isYT = tech.url && (tech.url.includes('youtube') || tech.url.includes('youtu.be'));
+                return (
+                  <View key={i} style={{ marginBottom:8, padding:10, borderWidth:1,
+                    borderColor:C.faint, backgroundColor:C.faint }}>
+                    <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:6 }}>
+                      <TextInput value={tech.name}
+                        onChangeText={v=>setClassLogTechs(ts=>ts.map((t,idx)=>idx===i?{...t,name:v}:t))}
+                        placeholder="Technique name…" placeholderTextColor={C.muted}
+                        style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
+                          fontSize:13, fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
+                      {classLogTechs.length > 1 && (
+                        <TouchableOpacity onPress={()=>setClassLogTechs(ts=>ts.filter((_,idx)=>idx!==i))} activeOpacity={0.75}>
+                          <Txt style={{ color:C.muted, fontSize:18 }}>✕</Txt>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <TextInput value={tech.notes||''}
+                      onChangeText={v=>setClassLogTechs(ts=>ts.map((t,idx)=>idx===i?{...t,notes:v}:t))}
+                      placeholder="Coaching note (optional)…" placeholderTextColor={C.muted}
+                      style={{ borderWidth:1, borderColor:C.border, color:C.text, fontSize:11,
+                        fontFamily:F.body, padding:8, backgroundColor:C.card, marginBottom:6 }}/>
+                    {/* URL / video reference */}
+                    <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+                      <Txt style={{ fontSize:14 }}>{isYT ? '▶️' : '🔗'}</Txt>
+                      <TextInput value={tech.url||''}
+                        onChangeText={v=>setClassLogTechs(ts=>ts.map((t,idx)=>idx===i?{...t,url:v}:t))}
+                        placeholder="Paste YouTube or any URL (optional)…"
+                        placeholderTextColor={C.muted}
+                        autoCapitalize="none" keyboardType="url"
+                        style={{ flex:1, borderWidth:1,
+                          borderColor:tech.url?`${C.teal}55`:C.border,
+                          color:tech.url?C.teal:C.text, fontSize:11,
+                          fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
+                    </View>
                   </View>
-                  <TextInput value={tech.notes||''}
-                    onChangeText={v=>setClassLogTechs(ts=>ts.map((t,idx)=>idx===i?{...t,notes:v}:t))}
-                    placeholder="Coaching note (optional)…" placeholderTextColor={C.muted}
-                    style={{ borderWidth:1, borderColor:C.border, color:C.text, fontSize:11,
-                      fontFamily:F.body, padding:8, backgroundColor:C.card }}/>
-                </View>
-              ))}
-              <TouchableOpacity onPress={()=>setClassLogTechs(ts=>[...ts,{name:'',notes:''}])} activeOpacity={0.75}
+                );
+              })}
+              <TouchableOpacity onPress={()=>setClassLogTechs(ts=>[...ts,{name:'',notes:'',url:''}])} activeOpacity={0.75}
                 style={{ flexDirection:'row', alignItems:'center', gap:8, padding:10,
                   borderWidth:1, borderStyle:'dashed', borderColor:C.borderMid, marginBottom:14 }}>
                 <Txt style={{ fontSize:18, color:C.muted }}>+</Txt>
