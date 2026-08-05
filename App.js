@@ -173,6 +173,7 @@ const ADULT_BELTS    = BELT_ORDER.filter(b => !BELT_COLORS[b]?.juvenile);
 const TABS = [
   { key:'Track',    label:'Track',    icon:'🥋' },
   { key:'Journal',  label:'Journal',  icon:'📖' },
+  { key:'Academy',  label:'Academy',  icon:'🏫' },
   { key:'Charts',   label:'Charts',   icon:'📊' },
   { key:'Rolls',    label:'Rolls',    icon:'⚔️' },
   { key:'Comps',    label:'Comps',    icon:'🏆' },
@@ -296,7 +297,17 @@ const db = {
     await supabase.from('training_days').delete().eq('athlete_id', athleteId).eq('date', date);
   },
 
-  // ── User Settings ─────────────────────────────────────────────────────────────
+  // ── Academy Leaderboard ───────────────────────────────────────────────────────
+  async getAcademyLeaderboard(academyId) {
+    // Fetch athletes, their training days, rolls, and competitions for the academy
+    const [{ data: aths }, { data: days }, { data: rolls }, { data: comps }] = await Promise.all([
+      supabase.from('athletes').select('id, name, belt, stripes, user_id').eq('academy_id', academyId),
+      supabase.from('training_days').select('athlete_id, date'),
+      supabase.from('rolls').select('athlete_id, started_at, roll_result, event_log'),
+      supabase.from('competitions').select('athlete_id, rounds:competition_rounds(result)'),
+    ]);
+    return { athletes: aths||[], days: days||[], rolls: rolls||[], comps: comps||[] };
+  },
   async getUserSettings(userId) {
     const { data } = await supabase.from('user_settings')
       .select('tutorial_done, skipped_logs').eq('user_id', userId).maybeSingle();
@@ -2661,6 +2672,303 @@ function TechVideoRef({ url }) {
       </Txt>
       <Txt style={{ fontSize:11, color:C.teal }}>→</Txt>
     </TouchableOpacity>
+  );
+}
+
+// ─── Academy Screen ────────────────────────────────────────────────────────────
+const MILESTONE_DEFS = [
+  { key:'first_roll',    icon:'⚔️',  label:'First roll',        check:(r)=>r.totalRolls>=1 },
+  { key:'streak_7',     icon:'🔥',  label:'7-day streak',      check:(_,streak)=>streak>=7 },
+  { key:'streak_14',    icon:'🔥🔥', label:'14-day streak',     check:(_,streak)=>streak>=14 },
+  { key:'rolls_10',     icon:'💪',  label:'10 rolls',          check:(r)=>r.totalRolls>=10 },
+  { key:'rolls_50',     icon:'⚔️⚔️', label:'50 rolls',          check:(r)=>r.totalRolls>=50 },
+  { key:'rolls_100',    icon:'💯',  label:'100 rolls',         check:(r)=>r.totalRolls>=100 },
+  { key:'first_sub',    icon:'🔒',  label:'First submission',  check:(r)=>r.subWins>=1 },
+  { key:'first_comp',   icon:'🏆',  label:'First competition', check:(r)=>r.compRounds>=1 },
+  { key:'first_win',    icon:'🥇',  label:'First comp win',    check:(r)=>r.compWins>=1 },
+  { key:'win_rate_50',  icon:'📈',  label:'50% win rate',      check:(r)=>r.totalRolls>=5&&r.winRate>=50 },
+];
+
+function computeStreak(dates) {
+  if (!dates.length) return 0;
+  const sorted = [...new Set(dates)].sort((a,b)=>b.localeCompare(a));
+  const today = new Date().toISOString().split('T')[0];
+  let streak = 0, cur = today;
+  for (const d of sorted) {
+    if (d === cur) { streak++; cur = new Date(new Date(cur)-86400000).toISOString().split('T')[0]; }
+    else if (d < cur) break;
+  }
+  return streak;
+}
+
+function getInitials(name='') {
+  const parts = name.trim().split(' ');
+  return parts.length>=2 ? parts[0][0]+parts[parts.length-1][0] : name.slice(0,2).toUpperCase();
+}
+
+const BELT_AVATAR_COLORS = {
+  white:'rgba(200,200,195,.25)', blue:'rgba(42,74,122,.35)',
+  purple:'rgba(90,58,122,.35)', brown:'rgba(90,48,24,.35)',
+  black:'rgba(42,42,42,.6)',
+};
+
+function AcademyScreen({ athlete, session }) {
+  const [leaderData,  setLeaderData]  = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [lbTab,       setLbTab]       = useState('days');    // 'days'|'rolls'|'badges'
+  const [period,      setPeriod]      = useState('month');   // 'month'|'3mo'|'all'
+
+  useEffect(() => {
+    if (!athlete?.academy_id) { setLoading(false); return; }
+    db.getAcademyLeaderboard(athlete.academy_id)
+      .then(data => { setLeaderData(data); setLoading(false); })
+      .catch(e => { console.error('leaderboard error:', e); setLoading(false); });
+  }, [athlete?.academy_id]);
+
+  if (!athlete?.academy_id) return (
+    <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:32 }}>
+      <Txt style={{ fontSize:28, marginBottom:12 }}>🏫</Txt>
+      <Cap style={{ textAlign:'center', marginBottom:8 }}>Not assigned to an academy</Cap>
+      <Txt style={{ fontSize:12, color:C.muted, textAlign:'center', lineHeight:18 }}>
+        Ask your coach to assign you to an academy to see the leaderboard.
+      </Txt>
+    </View>
+  );
+
+  if (loading) return (
+    <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
+      <ActivityIndicator color={C.gold} size="large"/>
+      <Cap style={{ marginTop:12 }}>Loading academy data…</Cap>
+    </View>
+  );
+
+  const { athletes=[], days=[], rolls=[], comps=[] } = leaderData || {};
+
+  // Period cutoff
+  const now = new Date();
+  const cutoff = period==='month'
+    ? new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+    : period==='3mo'
+    ? new Date(now-90*86400000).toISOString().split('T')[0]
+    : '2000-01-01';
+
+  // Compute stats per athlete
+  const stats = athletes.map(ath => {
+    const athDays  = days.filter(d=>d.athlete_id===ath.id && d.date>=cutoff).map(d=>d.date);
+    const athRolls = rolls.filter(r=>r.athlete_id===ath.id && (r.started_at||'')>=cutoff);
+    const allRolls = rolls.filter(r=>r.athlete_id===ath.id);
+    const athComps = comps.filter(c=>c.athlete_id===ath.id);
+    const allRounds = athComps.flatMap(c=>c.rounds||[]);
+    const streak = computeStreak(days.filter(d=>d.athlete_id===ath.id).map(d=>d.date));
+    const wins = athRolls.filter(r=>r.roll_result==='win').length;
+    const winRate = athRolls.length ? Math.round((wins/athRolls.length)*100) : 0;
+    const subWins = allRolls.filter(r=>{
+      const log = r.event_log || [];
+      return log.some(e=>e.type==='end'&&e.endType==='submission'&&e.submissionWinner==='me');
+    }).length;
+    const compWins = allRounds.filter(r=>r.result==='win').length;
+    return {
+      ...ath,
+      trainingDays: athDays.length,
+      totalRolls: athRolls.length,
+      allTimeRolls: allRolls.length,
+      streak, wins, winRate,
+      subWins, compWins,
+      compRounds: allRounds.length,
+    };
+  });
+
+  const byDays  = [...stats].sort((a,b)=>b.trainingDays-a.trainingDays||b.streak-a.streak);
+  const byRolls = [...stats].sort((a,b)=>b.totalRolls-a.totalRolls||b.winRate-a.winRate);
+  const myId = athlete?.id;
+
+  const PodiumCard = ({ s, pos }) => {
+    const medals = ['🥇','🥈','🥉'];
+    const heights = [72, 52, 38];
+    const colors = [
+      'rgba(200,162,77,.25)', 'rgba(160,160,155,.15)', 'rgba(150,90,50,.15)'];
+    const borders = [
+      'rgba(200,162,77,.5)', 'rgba(160,160,155,.4)', 'rgba(150,90,50,.35)'];
+    const value = lbTab==='days' ? `${s.trainingDays}d` : `${s.totalRolls}`;
+    return (
+      <View style={{ flex:1, alignItems:'center', gap:4 }}>
+        <Cap style={{ fontSize:8, textAlign:'center' }} numberOfLines={1}>{s.name.split(' ')[0]}</Cap>
+        <View style={{ width:'100%', height:heights[pos], borderRadius:4, borderWidth:.5,
+          backgroundColor:colors[pos], borderColor:borders[pos],
+          alignItems:'center', justifyContent:'center' }}>
+          <Txt style={{ fontSize:18 }}>{medals[pos]}</Txt>
+        </View>
+        <View style={{ borderWidth:.5, borderColor:`${C.gold}44`, backgroundColor:`${C.gold}10`,
+          paddingHorizontal:6, paddingVertical:2, borderRadius:3 }}>
+          <Cap style={{ fontSize:7, color:C.gold }}>{value}</Cap>
+        </View>
+      </View>
+    );
+  };
+
+  const LeaderRow = ({ s, rank, metric, sub }) => {
+    const isMe = s.id === myId;
+    const list = lbTab==='days' ? byDays : byRolls;
+    const max = list[0]?.[metric] || 1;
+    const pct = Math.min((s[metric]/max)*100, 100);
+    const beltColor = BELT_AVATAR_COLORS[s.belt] || BELT_AVATAR_COLORS.white;
+    return (
+      <View style={{ backgroundColor:isMe?`${C.gold}08`:'transparent',
+        borderRadius:isMe?6:0, padding:isMe?8:0,
+        marginBottom:isMe?4:0, borderWidth:isMe?.5:0,
+        borderColor:isMe?`${C.gold}33`:'transparent' }}>
+        {isMe && <Cap style={{ fontSize:7, color:C.gold, marginBottom:2 }}>You</Cap>}
+        <View style={{ flexDirection:'row', alignItems:'center', gap:10, paddingVertical:6,
+          borderBottomWidth:isMe?0:.5, borderBottomColor:C.faint }}>
+          <Txt style={{ fontSize:12, fontFamily:F.semi, color:rank<=3?C.gold:C.muted,
+            width:18, textAlign:'center' }}>{rank}</Txt>
+          <View style={{ width:30, height:30, borderRadius:15, backgroundColor:beltColor,
+            alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <Txt style={{ fontSize:10, fontFamily:F.semi, color:C.text }}>{getInitials(s.name)}</Txt>
+          </View>
+          <View style={{ flex:1, minWidth:0 }}>
+            <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}
+              numberOfLines={1}>{s.name}</Txt>
+            <Cap style={{ fontSize:8, marginTop:1 }}>{sub}</Cap>
+          </View>
+          <View style={{ width:56 }}>
+            <View style={{ height:4, backgroundColor:C.faint, borderRadius:2 }}>
+              <View style={{ height:4, width:`${pct}%`, backgroundColor:C.gold, borderRadius:2 }}/>
+            </View>
+          </View>
+          <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.text, width:28, textAlign:'right' }}>
+            {s[metric]}
+          </Txt>
+        </View>
+      </View>
+    );
+  };
+
+  const top3Days  = byDays.slice(0,3);
+  const top3Rolls = byRolls.slice(0,3);
+
+  return (
+    <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
+
+      {/* Header */}
+      <View style={{ marginBottom:16 }}>
+        <Txt style={{ fontSize:20, fontFamily:F.display, color:C.text }}>Grounded Skills Lab</Txt>
+        <Cap style={{ marginTop:4 }}>{athletes.length} members</Cap>
+      </View>
+
+      {/* View tabs */}
+      <View style={{ flexDirection:'row', gap:6, marginBottom:14 }}>
+        {[['days','Training days'],['rolls','Rolls logged'],['badges','Milestones']].map(([k,l])=>(
+          <TouchableOpacity key={k} onPress={()=>setLbTab(k)} activeOpacity={0.75}
+            style={{ flex:1, paddingVertical:8, borderWidth:1, alignItems:'center',
+              borderRadius:6, borderColor:lbTab===k?C.gold:C.border,
+              backgroundColor:lbTab===k?C.goldDim:'transparent' }}>
+            <Txt style={{ fontSize:9, fontFamily:lbTab===k?F.semi:F.body,
+              color:lbTab===k?C.gold:C.muted }}>{l}</Txt>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Period filter — not shown for badges */}
+      {lbTab !== 'badges' && (
+        <View style={{ flexDirection:'row', gap:6, marginBottom:14 }}>
+          {[['month','This month'],['3mo','3 months'],['all','All time']].map(([k,l])=>(
+            <TouchableOpacity key={k} onPress={()=>setPeriod(k)} activeOpacity={0.75}
+              style={{ flex:1, paddingVertical:6, borderWidth:.5, alignItems:'center',
+                borderRadius:4, borderColor:period===k?`${C.gold}66`:C.border,
+                backgroundColor:period===k?`${C.gold}10`:'transparent' }}>
+              <Cap style={{ fontSize:8, color:period===k?C.gold:C.muted }}>{l}</Cap>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Training days leaderboard */}
+      {lbTab === 'days' && (
+        <View>
+          {/* Podium */}
+          {top3Days.length >= 2 && (
+            <View style={{ flexDirection:'row', alignItems:'flex-end', gap:6,
+              marginBottom:16, paddingHorizontal:4 }}>
+              {[top3Days[1], top3Days[0], top3Days[2]].filter(Boolean).map((s,i)=>(
+                <PodiumCard key={s.id} s={s} pos={i===1?0:i===0?1:2}/>
+              ))}
+            </View>
+          )}
+          <View style={{ width:3, height:14, backgroundColor:C.gold, marginBottom:10 }}/>
+          {byDays.map((s,i)=>(
+            <LeaderRow key={s.id} s={s} rank={i+1} metric="trainingDays"
+              sub={`${s.streak}d streak${s.streak>=7?' 🔥':''}`}/>
+          ))}
+        </View>
+      )}
+
+      {/* Rolls leaderboard */}
+      {lbTab === 'rolls' && (
+        <View>
+          {top3Rolls.length >= 2 && (
+            <View style={{ flexDirection:'row', alignItems:'flex-end', gap:6,
+              marginBottom:16, paddingHorizontal:4 }}>
+              {[top3Rolls[1], top3Rolls[0], top3Rolls[2]].filter(Boolean).map((s,i)=>(
+                <PodiumCard key={s.id} s={s} pos={i===1?0:i===0?1:2}/>
+              ))}
+            </View>
+          )}
+          <View style={{ width:3, height:14, backgroundColor:C.gold, marginBottom:10 }}/>
+          {byRolls.map((s,i)=>(
+            <LeaderRow key={s.id} s={s} rank={i+1} metric="totalRolls"
+              sub={`${s.winRate}% win rate`}/>
+          ))}
+        </View>
+      )}
+
+      {/* Milestones / badges */}
+      {lbTab === 'badges' && (
+        <View>
+          {stats.map(s => {
+            const streak = s.streak;
+            const earned = MILESTONE_DEFS.filter(m=>m.check(s, streak));
+            const pending = MILESTONE_DEFS.filter(m=>!m.check(s, streak));
+            const isMe = s.id === myId;
+            const beltColor = BELT_AVATAR_COLORS[s.belt] || BELT_AVATAR_COLORS.white;
+            return (
+              <View key={s.id} style={{ marginBottom:16,
+                borderWidth:isMe?.5:0, borderColor:`${C.gold}33`,
+                borderRadius:isMe?8:0, padding:isMe?10:0 }}>
+                {isMe && <Cap style={{ fontSize:7, color:C.gold, marginBottom:4 }}>You</Cap>}
+                <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:8 }}>
+                  <View style={{ width:28, height:28, borderRadius:14, backgroundColor:beltColor,
+                    alignItems:'center', justifyContent:'center' }}>
+                    <Txt style={{ fontSize:10, fontFamily:F.semi, color:C.text }}>{getInitials(s.name)}</Txt>
+                  </View>
+                  <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>{s.name}</Txt>
+                  <Cap style={{ fontSize:8 }}>{earned.length} badges</Cap>
+                </View>
+                <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6 }}>
+                  {earned.map(m=>(
+                    <View key={m.key} style={{ borderWidth:.5, borderColor:`${C.gold}55`,
+                      backgroundColor:`${C.gold}10`, borderRadius:6, padding:8,
+                      alignItems:'center', minWidth:70 }}>
+                      <Txt style={{ fontSize:18, marginBottom:3 }}>{m.icon}</Txt>
+                      <Cap style={{ fontSize:7, color:C.gold, textAlign:'center' }}>{m.label}</Cap>
+                    </View>
+                  ))}
+                  {pending.slice(0,2).map(m=>(
+                    <View key={m.key} style={{ borderWidth:.5, borderColor:C.faint,
+                      backgroundColor:C.faint, borderRadius:6, padding:8,
+                      alignItems:'center', minWidth:70, opacity:0.4 }}>
+                      <Txt style={{ fontSize:18, marginBottom:3 }}>{m.icon}</Txt>
+                      <Cap style={{ fontSize:7, textAlign:'center' }}>{m.label}</Cap>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+    </ScrollView>
   );
 }
 
@@ -6593,8 +6901,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
               const isPending = key === 'Journal' && classLogs.filter(cl =>
                 !journal.some(e => e.classLogId === cl.id) &&
                 !skippedLogIds.has(cl.id)
-              ).length > 0;
-              return (
+              ).length > 0;              return (
                 <TouchableOpacity key={key} onPress={()=>setTab(key)} activeOpacity={0.75}
                   style={{ flex:1, paddingVertical:9, alignItems:'center',
                     borderTopWidth:2, borderTopColor:tab===key?C.gold:'transparent',
@@ -6667,6 +6974,9 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           activeRoll={activeRoll} onStartRoll={startRoll} onEndRoll={finishRoll}
           onTogglePause={togglePause} onMutate={mutateActive}
           activeProfile={activeProfile} trackingProps={trackingProps}/>
+      )}
+      {tab==='Academy' && (
+        <AcademyScreen athlete={athlete} session={session}/>
       )}
       {tab==='Journal' && (
         <JournalScreen
