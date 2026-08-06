@@ -310,8 +310,20 @@ const db = {
   },
   async getUserSettings(userId) {
     const { data } = await supabase.from('user_settings')
-      .select('tutorial_done, skipped_logs').eq('user_id', userId).maybeSingle();
-    return data || { tutorial_done: false, skipped_logs: [] };
+      .select('tutorial_done, skipped_logs, consent_agreed, consent_version')
+      .eq('user_id', userId).maybeSingle();
+    return data || { tutorial_done: false, skipped_logs: [], consent_agreed: false, consent_version: '' };
+  },
+  async recordConsent(userId) {
+    const { error } = await supabase.from('user_settings')
+      .upsert({
+        user_id: userId,
+        consent_agreed: true,
+        consent_version: '1.0',
+        consent_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+    if (error) console.error('recordConsent error:', error.message);
   },
   async setTutorialDone(userId) {
     const { error } = await supabase.from('user_settings')
@@ -2972,6 +2984,150 @@ function AcademyScreen({ athlete, session }) {
   );
 }
 
+// ─── Beta Consent Modal ───────────────────────────────────────────────────────
+const CONSENT_VERSION = '1.0';
+
+function ConsentModal({ onAgree, onDecline }) {
+  const [scrolled, setScrolled] = useState(false);
+  const [checked,  setChecked]  = useState(false);
+
+  return (
+    <Modal visible transparent animationType="fade">
+      <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.92)',
+        justifyContent:'center', padding:16 }}>
+        <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid,
+          borderRadius:12, overflow:'hidden', maxHeight:'90%' }}>
+
+          {/* Header */}
+          <View style={{ backgroundColor:C.gold, padding:16 }}>
+            <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:4 }}>
+              <Txt style={{ fontSize:20 }}>📋</Txt>
+              <Txt style={{ fontSize:14, fontFamily:F.bold, color:'#0D0D0B', flex:1 }}>
+                Beta Testing Agreement
+              </Txt>
+            </View>
+            <Cap style={{ color:'rgba(13,13,11,0.65)', fontSize:9 }}>
+              Grounded Skills Lab · Version {CONSENT_VERSION}
+            </Cap>
+          </View>
+
+          {/* Scrollable agreement text */}
+          <ScrollView
+            style={{ maxHeight:340 }}
+            contentContainerStyle={{ padding:16 }}
+            onScrollEndDrag={()=>setScrolled(true)}
+            onMomentumScrollEnd={()=>setScrolled(true)}
+            scrollEventThrottle={100}
+            onScroll={({nativeEvent})=>{
+              const {contentOffset,contentSize,layoutMeasurement}=nativeEvent;
+              if(contentOffset.y+layoutMeasurement.height>=contentSize.height-20) setScrolled(true);
+            }}>
+
+            <Txt style={{ fontSize:13, fontFamily:F.bold, color:C.text, marginBottom:8 }}>
+              1. Purpose
+            </Txt>
+            <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:14 }}>
+              You are participating in a closed beta test of the GSL BJJ Tracker app ("the App"),
+              operated by Grounded Skills Lab. This agreement governs your use of the App during the
+              beta testing period.
+            </Txt>
+
+            <Txt style={{ fontSize:13, fontFamily:F.bold, color:C.text, marginBottom:8 }}>
+              2. Data collection and use
+            </Txt>
+            <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:14 }}>
+              By using this App you agree that Grounded Skills Lab may collect and store:
+              {'\n\n'}• Training logs, roll results, and competition records you enter
+              {'\n'}• Journal entries and technique notes you create
+              {'\n'}• App usage patterns for the purpose of improving the App
+              {'\n\n'}Your data will not be sold to third parties. It may be viewed by your coach and
+              academy administrators as part of the coaching relationship you have with Grounded Skills Lab.
+            </Txt>
+
+            <Txt style={{ fontSize:13, fontFamily:F.bold, color:C.text, marginBottom:8 }}>
+              3. Beta software disclaimer
+            </Txt>
+            <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:14 }}>
+              This App is beta software. It may contain bugs, errors, or incomplete features. Grounded
+              Skills Lab makes no warranty that the App will be error-free, uninterrupted, or that
+              data will not be lost. You use it at your own risk during the testing period.
+            </Txt>
+
+            <Txt style={{ fontSize:13, fontFamily:F.bold, color:C.text, marginBottom:8 }}>
+              4. Feedback
+            </Txt>
+            <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:14 }}>
+              You agree to provide honest feedback about bugs, usability issues, and feature requests.
+              Any feedback you provide may be used to improve the App without compensation.
+            </Txt>
+
+            <Txt style={{ fontSize:13, fontFamily:F.bold, color:C.text, marginBottom:8 }}>
+              5. Confidentiality
+            </Txt>
+            <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:14 }}>
+              The App and its features are confidential. You agree not to share screenshots, recordings,
+              or descriptions of the App with people outside your academy without permission from
+              Grounded Skills Lab.
+            </Txt>
+
+            <Txt style={{ fontSize:13, fontFamily:F.bold, color:C.text, marginBottom:8 }}>
+              6. Withdrawal
+            </Txt>
+            <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:14 }}>
+              You may withdraw from the beta test at any time by contacting your coach. Your data will
+              be retained for a reasonable period to support your training history unless you request
+              its deletion.
+            </Txt>
+
+            <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:8 }}>
+              By tapping "I Agree" you confirm you have read and understood this agreement and consent
+              to your data being used as described.
+            </Txt>
+
+            {!scrolled && (
+              <View style={{ alignItems:'center', paddingTop:8 }}>
+                <Cap style={{ color:C.muted, fontSize:9 }}>↓ Scroll to read the full agreement</Cap>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Checkbox + buttons */}
+          <View style={{ padding:16, borderTopWidth:1, borderTopColor:C.border }}>
+            <TouchableOpacity onPress={()=>setChecked(c=>!c)} activeOpacity={0.75}
+              style={{ flexDirection:'row', alignItems:'flex-start', gap:10, marginBottom:16 }}>
+              <View style={{ width:20, height:20, borderWidth:2,
+                borderColor:checked?C.gold:C.borderMid,
+                backgroundColor:checked?C.gold:'transparent',
+                alignItems:'center', justifyContent:'center', marginTop:1 }}>
+                {checked && <Txt style={{ color:'#0D0D0B', fontSize:12, lineHeight:14 }}>✓</Txt>}
+              </View>
+              <Txt style={{ fontSize:12, color:C.textDim, flex:1, lineHeight:18 }}>
+                I have read and agree to the Beta Testing Participation and Data Consent Agreement.
+              </Txt>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={onAgree}
+              disabled={!checked || !scrolled} activeOpacity={0.8}
+              style={{ backgroundColor: checked && scrolled ? C.gold : C.faint,
+                padding:14, alignItems:'center', marginBottom:8, borderRadius:6 }}>
+              <Txt style={{ fontSize:11, fontFamily:F.semi, letterSpacing:1,
+                textTransform:'uppercase',
+                color: checked && scrolled ? '#0D0D0B' : C.muted }}>
+                I Agree — Continue to App
+              </Txt>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={onDecline} activeOpacity={0.75}
+              style={{ alignItems:'center', padding:8 }}>
+              <Cap style={{ color:C.muted, fontSize:9 }}>Decline and sign out</Cap>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Tutorial Overlay ─────────────────────────────────────────────────────────
 const TUTORIAL_STEPS = [
   {
@@ -5187,6 +5343,19 @@ function StartRoundModal({ visible, roundNum, onStart, onCancel }) {
 
 // ─── Main App ────────────────────────────────────────────────────────────────────
 // ─── Coach Dashboard ───────────────────────────────────────────────────────────
+// Simple fuzzy match — returns true if all chars of query appear in order in str
+const fuzzyMatch = (str='', query='') => {
+  if (!query.trim()) return true;
+  const s = str.toLowerCase(); const q = query.toLowerCase().trim();
+  let si = 0;
+  for (let qi = 0; qi < q.length; qi++) {
+    si = s.indexOf(q[qi], si);
+    if (si === -1) return false;
+    si++;
+  }
+  return true;
+};
+
 function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete }) {
   const isAdmin = userRole === 'admin';
   const [athletes,   setAthletes]  = useState([]);
@@ -5296,6 +5465,12 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   const [newAthleteEmail,   setNewAthleteEmail]    = useState('');
   const [newAthleteAcademy, setNewAthleteAcademy] = useState('');
   const [inviteEmail,       setInviteEmail]        = useState('');
+  const [coachSearch,       setCoachSearch]        = useState('');
+  const [academySearch,     setAcademySearch]      = useState('');
+  const [athleteSearch,     setAthleteSearch]      = useState('');
+  const [editingAthlete,    setEditingAthlete]     = useState(null);
+  const [openSections,      setOpenSections]       = useState({ invite:true, logs:false, coaches:false, athletes:false, academy:false });
+  const toggleSection = key => setOpenSections(s=>({...s,[key]:!s[key]}));
 
   // Option 2: Create account on behalf of athlete
   const createAthleteAccount = async () => {
@@ -5547,337 +5722,451 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
         </View>
       ) : activeView === 'manage' ? (
 
-        /* ── ADMIN MANAGE PANEL ── */
-        <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
+        /* ── ADMIN MANAGE PANEL — consolidated ── */
+        <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:12 }} keyboardShouldPersistTaps="always">
 
-          {/* ── Option 1: Share signup link ── */}
-          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
-            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
-              <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 1 · Share Signup Link</Txt>
-            </View>
-            <View style={{ padding:14 }}>
-              <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
-                Share this link with athletes. They sign up themselves with their name, email and password.
-              </Txt>
-              <View style={{ borderWidth:1, borderColor:C.borderMid, backgroundColor:C.faint, padding:12, marginBottom:10 }}>
-                <Txt style={{ fontSize:12, color:C.gold, fontFamily:F.medium }}>
-                  https://bjjanalytics.netlify.app
-                </Txt>
-              </View>
-              <TouchableOpacity onPress={()=>{
-                if(typeof navigator !== 'undefined' && navigator.clipboard) {
-                  navigator.clipboard.writeText('https://bjjanalytics.netlify.app');
-                  setManageMsg('✓ Link copied to clipboard!');
-                  setTimeout(()=>setManageMsg(''), 3000);
-                }
-              }} activeOpacity={0.75}
-                style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, padding:12, alignItems:'center' }}>
-                <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.gold }}>Copy Link</Txt>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* ── Option 2: Create account on behalf ── */}
-          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
-            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
-              <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 2 · Create Account for Athlete</Txt>
-            </View>
-            <View style={{ padding:14 }}>
-              <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
-                Create an account on their behalf. They'll receive a password reset email to set their own password.
-              </Txt>
-              <View style={{ flexDirection:'row', gap:8, marginBottom:10 }}>
-                <View style={{ flex:1 }}>
-                  <Cap style={{ marginBottom:6 }}>First Name</Cap>
-                  <TextInput value={newAthleteFirst} onChangeText={setNewAthleteFirst}
-                    placeholder="First" placeholderTextColor={C.muted} autoCapitalize="words"
-                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                      fontFamily:F.body, padding:10, backgroundColor:C.faint }}/>
+          {/* Helper — collapsible section header */}
+          {/* ── Section 1: Invite athletes ── */}
+          {[{
+            key:'invite', icon:'👥', label:'Invite athletes',
+            meta:`${athletes.length} member${athletes.length!==1?'s':''}`,
+            color:C.teal,
+          },{
+            key:'logs', icon:'📋', label:'Class logs',
+            meta:`${coachClassLogs.length} published`,
+            color:C.gold,
+          },{
+            key:'coaches', icon:'🛡️', label:'Coaches',
+            meta:`${allUsers.filter(u=>u.role==='coach').length} assigned`,
+            color:'#5A7AD0',
+          },{
+            key:'athletes', icon:'🥋', label:'Athletes',
+            meta:`${athletes.length} total · ${academies.length} academy`,
+            color:'#9A7ACA',
+          },{
+            key:'academy', icon:'🏛️', label:'Academy settings',
+            meta: academies[0]?.name || 'Not set',
+            color:C.muted,
+          }].map(({ key, icon, label, meta, color }) => (
+            <View key={key} style={{ borderWidth:1, borderColor:C.border,
+              backgroundColor:C.card, marginBottom:10, borderRadius:8, overflow:'hidden' }}>
+              <TouchableOpacity onPress={()=>toggleSection(key)} activeOpacity={0.75}
+                style={{ flexDirection:'row', alignItems:'center', gap:10, padding:14 }}>
+                <View style={{ width:30, height:30, borderRadius:6,
+                  backgroundColor:`${color}18`, alignItems:'center', justifyContent:'center' }}>
+                  <Txt style={{ fontSize:16 }}>{icon}</Txt>
                 </View>
                 <View style={{ flex:1 }}>
-                  <Cap style={{ marginBottom:6 }}>Last Name</Cap>
-                  <TextInput value={newAthleteLast} onChangeText={setNewAthleteLast}
-                    placeholder="Last" placeholderTextColor={C.muted} autoCapitalize="words"
-                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                      fontFamily:F.body, padding:10, backgroundColor:C.faint }}/>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text }}>{label}</Txt>
+                  <Cap style={{ fontSize:9, marginTop:2 }}>{meta}</Cap>
                 </View>
-              </View>
-              <Cap style={{ marginBottom:6 }}>Email</Cap>
-              <TextInput value={newAthleteEmail} onChangeText={setNewAthleteEmail}
-                placeholder="athlete@email.com" placeholderTextColor={C.muted}
-                autoCapitalize="none" keyboardType="email-address"
-                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                  fontFamily:F.body, padding:10, backgroundColor:C.faint, marginBottom:10 }}/>
-              <Cap style={{ marginBottom:6 }}>Assign to Academy</Cap>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:12 }}>
-                <View style={{ flexDirection:'row', gap:6 }}>
-                  <TouchableOpacity onPress={()=>setNewAthleteAcademy('')} activeOpacity={0.75}
-                    style={{ paddingHorizontal:10, paddingVertical:7, borderWidth:1,
-                      borderColor:!newAthleteAcademy?C.gold:C.border,
-                      backgroundColor:!newAthleteAcademy?C.goldDim:'transparent' }}>
-                    <Txt style={{ fontSize:10, color:!newAthleteAcademy?C.gold:C.muted }}>None</Txt>
-                  </TouchableOpacity>
-                  {academies.map(ac=>(
-                    <TouchableOpacity key={ac.id} onPress={()=>setNewAthleteAcademy(ac.id)} activeOpacity={0.75}
-                      style={{ paddingHorizontal:10, paddingVertical:7, borderWidth:1,
-                        borderColor:newAthleteAcademy===ac.id?C.gold:C.border,
-                        backgroundColor:newAthleteAcademy===ac.id?C.goldDim:'transparent' }}>
-                      <Txt style={{ fontSize:10, color:newAthleteAcademy===ac.id?C.gold:C.muted }}>{ac.name}</Txt>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-              <TouchableOpacity onPress={createAthleteAccount} disabled={manageLoading||!newAthleteEmail.trim()||!newAthleteFirst.trim()} activeOpacity={0.8}
-                style={{ backgroundColor:(!newAthleteEmail.trim()||!newAthleteFirst.trim())?C.faint:C.teal, padding:14, alignItems:'center' }}>
-                {manageLoading
-                  ? <ActivityIndicator color={C.offWhite}/>
-                  : <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:2, textTransform:'uppercase', color:C.offWhite }}>Create Account</Txt>}
+                <Txt style={{ color:C.muted, fontSize:16 }}>{openSections[key]?'▲':'▼'}</Txt>
               </TouchableOpacity>
-            </View>
-          </View>
 
-          {/* ── Option 3: Send invite email ── */}
-          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
-            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
-              <View style={{ width:3, height:14, backgroundColor:C.amber, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Option 3 · Send Invite Email</Txt>
+              {openSections[key] && (
+                <View style={{ borderTopWidth:1, borderTopColor:C.border }}>
+
+                  {/* ── INVITE ── */}
+                  {key==='invite' && (
+                    <View style={{ padding:14 }}>
+                      {/* Signup link */}
+                      <Cap style={{ marginBottom:6 }}>Share signup link</Cap>
+                      <View style={{ flexDirection:'row', alignItems:'center', gap:8,
+                        borderWidth:1, borderColor:C.borderMid, padding:10,
+                        marginBottom:14, backgroundColor:C.faint }}>
+                        <Txt style={{ fontSize:11, color:C.teal, flex:1 }}>bjjanalytics.netlify.app</Txt>
+                        <TouchableOpacity onPress={()=>{
+                          if(typeof navigator!=='undefined'&&navigator.clipboard)
+                            navigator.clipboard.writeText('https://bjjanalytics.netlify.app');
+                          setManageMsg('✓ Link copied!'); setTimeout(()=>setManageMsg(''),2000);
+                        }} activeOpacity={0.75}
+                          style={{ borderWidth:1, borderColor:`${C.teal}55`, paddingHorizontal:8, paddingVertical:4 }}>
+                          <Cap style={{ fontSize:8, color:C.teal }}>Copy</Cap>
+                        </TouchableOpacity>
+                      </View>
+                      {/* Send invite */}
+                      <Cap style={{ marginBottom:6 }}>Send invite email</Cap>
+                      <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+                        <TextInput value={inviteEmail} onChangeText={setInviteEmail}
+                          placeholder="athlete@email.com" placeholderTextColor={C.muted}
+                          autoCapitalize="none" keyboardType="email-address"
+                          style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
+                            fontSize:13, fontFamily:F.body, padding:10, backgroundColor:C.faint }}/>
+                        <TouchableOpacity onPress={sendInvite} disabled={!inviteEmail.trim()||manageLoading}
+                          activeOpacity={0.8}
+                          style={{ backgroundColor:inviteEmail.trim()?C.teal:C.faint,
+                            paddingHorizontal:14, alignItems:'center', justifyContent:'center' }}>
+                          {manageLoading?<ActivityIndicator color="#fff" size="small"/>
+                            :<Cap style={{ color:'#fff', fontSize:8 }}>Send</Cap>}
+                        </TouchableOpacity>
+                      </View>
+                      {/* Create account */}
+                      <Cap style={{ marginBottom:6 }}>Create account for athlete</Cap>
+                      <View style={{ flexDirection:'row', gap:8, marginBottom:10 }}>
+                        <TextInput value={newAthleteFirst} onChangeText={setNewAthleteFirst}
+                          placeholder="First" placeholderTextColor={C.muted} autoCapitalize="words"
+                          style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
+                            fontSize:13, fontFamily:F.body, padding:10, backgroundColor:C.faint }}/>
+                        <TextInput value={newAthleteLast} onChangeText={setNewAthleteLast}
+                          placeholder="Last" placeholderTextColor={C.muted} autoCapitalize="words"
+                          style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
+                            fontSize:13, fontFamily:F.body, padding:10, backgroundColor:C.faint }}/>
+                      </View>
+                      <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+                        <TextInput value={newAthleteEmail} onChangeText={setNewAthleteEmail}
+                          placeholder="email@address.com" placeholderTextColor={C.muted}
+                          autoCapitalize="none" keyboardType="email-address"
+                          style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
+                            fontSize:13, fontFamily:F.body, padding:10, backgroundColor:C.faint }}/>
+                        <TouchableOpacity onPress={createAthleteAccount}
+                          disabled={!newAthleteFirst.trim()||!newAthleteEmail.trim()||manageLoading}
+                          activeOpacity={0.8}
+                          style={{ backgroundColor:newAthleteFirst.trim()&&newAthleteEmail.trim()?C.teal:C.faint,
+                            paddingHorizontal:14, alignItems:'center', justifyContent:'center' }}>
+                          {manageLoading?<ActivityIndicator color="#fff" size="small"/>
+                            :<Cap style={{ color:'#fff', fontSize:8 }}>Create</Cap>}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* ── CLASS LOGS ── */}
+                  {key==='logs' && (
+                    <View style={{ padding:14 }}>
+                      {coachClassLogs.length===0 ? (
+                        <Cap style={{ textAlign:'center', color:C.muted, marginBottom:12 }}>No class logs yet.</Cap>
+                      ) : coachClassLogs.map(cl=>{
+                        const st=SESSION_TYPES.find(s=>s.key===cl.session_type)||SESSION_TYPES[0];
+                        return (
+                          <View key={cl.id} style={{ flexDirection:'row', alignItems:'center',
+                            gap:8, paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.faint }}>
+                            <Txt style={{ fontSize:16 }}>{st.icon}</Txt>
+                            <View style={{ flex:1 }}>
+                              <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>{st.label} · {cl.date}</Txt>
+                              <Cap style={{ fontSize:8, marginTop:2 }} numberOfLines={1}>
+                                {(cl.techniques||[]).map(t=>t.name).filter(Boolean).slice(0,3).join(', ')}
+                              </Cap>
+                            </View>
+                            <TouchableOpacity onPress={()=>startEditClassLog(cl)} activeOpacity={0.75}
+                              style={{ borderWidth:1, borderColor:`${C.gold}55`, paddingHorizontal:8, paddingVertical:4, borderRadius:4 }}>
+                              <Txt style={{ fontSize:9, color:C.gold }}>✎ Edit</Txt>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={async()=>{
+                              await db.deleteClassLog(cl.id);
+                              setCoachClassLogs(p=>p.filter(c=>c.id!==cl.id));
+                            }} activeOpacity={0.75}
+                              style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:8, paddingVertical:4, borderRadius:4 }}>
+                              <Txt style={{ fontSize:9, color:C.red }}>✕</Txt>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                      <TouchableOpacity onPress={()=>setShowClassLog(true)} activeOpacity={0.75}
+                        style={{ borderWidth:1, borderColor:`${C.gold}44`, backgroundColor:`${C.gold}08`,
+                          padding:12, alignItems:'center', marginTop:10, borderRadius:6 }}>
+                        <Cap style={{ color:C.gold }}>+ New class log</Cap>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* ── COACHES ── */}
+                  {key==='coaches' && (
+                    <View style={{ padding:14 }}>
+                      {/* Current coaches */}
+                      {allUsers.filter(u=>u.role==='coach').map(u=>{
+                        const ath=athletes.find(a=>a.user_id===u.user_id);
+                        return ath ? (
+                          <View key={u.user_id} style={{ flexDirection:'row', alignItems:'center',
+                            gap:10, paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.faint }}>
+                            <View style={{ width:30, height:30, borderRadius:15,
+                              backgroundColor:`${C.teal}22`, alignItems:'center', justifyContent:'center' }}>
+                              <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.teal }}>
+                                {(ath.name||'?').slice(0,2).toUpperCase()}
+                              </Txt>
+                            </View>
+                            <View style={{ flex:1 }}>
+                              <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>{ath.name}</Txt>
+                              <Cap style={{ fontSize:8 }}>{ath.belt} belt · coach</Cap>
+                            </View>
+                            <TouchableOpacity onPress={async()=>{
+                              await supabase.from('user_roles').update({role:'athlete'}).eq('user_id',u.user_id);
+                              const {data:users}=await supabase.from('user_roles').select('user_id,role,academy_id');
+                              setAllUsers(users||[]);
+                              setManageMsg(`✓ ${ath.name} changed back to athlete.`);
+                              setTimeout(()=>setManageMsg(''),3000);
+                            }} activeOpacity={0.75}
+                              style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:8, paddingVertical:4, borderRadius:4 }}>
+                              <Txt style={{ fontSize:9, color:C.red }}>Remove</Txt>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null;
+                      })}
+                      {/* Fuzzy search to assign coach */}
+                      <Cap style={{ marginBottom:8, marginTop:14 }}>Assign coach role</Cap>
+                      <TextInput value={coachSearch} onChangeText={setCoachSearch}
+                        placeholder="Search athlete name…" placeholderTextColor={C.muted}
+                        style={{ borderWidth:1, borderColor:C.borderMid, color:C.text,
+                          fontSize:13, fontFamily:F.body, padding:10,
+                          backgroundColor:C.faint, marginBottom:6 }}/>
+                      {coachSearch.trim().length > 0 && (
+                        <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card }}>
+                          {athletes
+                            .filter(a=>fuzzyMatch(a.name,coachSearch) && allUsers.find(u=>u.user_id===a.user_id)?.role!=='coach')
+                            .slice(0,5)
+                            .map(a=>(
+                              <TouchableOpacity key={a.id} onPress={()=>{
+                                assignCoach(a.user_id, a.name);
+                                setCoachSearch('');
+                              }} activeOpacity={0.75}
+                                style={{ flexDirection:'row', alignItems:'center', gap:8,
+                                  padding:10, borderBottomWidth:1, borderBottomColor:C.faint }}>
+                                <View style={{ width:26, height:26, borderRadius:13,
+                                  backgroundColor:`${C.teal}18`, alignItems:'center', justifyContent:'center' }}>
+                                  <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.teal }}>
+                                    {(a.name||'?').slice(0,2).toUpperCase()}
+                                  </Txt>
+                                </View>
+                                <View style={{ flex:1 }}>
+                                  <Txt style={{ fontSize:12, color:C.text }}>{a.name}</Txt>
+                                  <Cap style={{ fontSize:8 }}>{a.belt} belt</Cap>
+                                </View>
+                                <Cap style={{ color:C.teal, fontSize:9 }}>Make coach</Cap>
+                              </TouchableOpacity>
+                            ))}
+                          {athletes.filter(a=>fuzzyMatch(a.name,coachSearch) && allUsers.find(u=>u.user_id===a.user_id)?.role!=='coach').length===0 && (
+                            <View style={{ padding:12 }}>
+                              <Cap style={{ textAlign:'center', color:C.muted }}>No athletes match "{coachSearch}"</Cap>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* ── ATHLETES ── */}
+                  {key==='athletes' && (
+                    <View style={{ padding:14 }}>
+                      <TextInput value={athleteSearch} onChangeText={setAthleteSearch}
+                        placeholder="Search athletes…" placeholderTextColor={C.muted}
+                        style={{ borderWidth:1, borderColor:C.borderMid, color:C.text,
+                          fontSize:13, fontFamily:F.body, padding:10,
+                          backgroundColor:C.faint, marginBottom:12 }}/>
+                      {/* Group by academy */}
+                      {[...academies.map(ac=>({
+                        id:ac.id, name:ac.name,
+                        members:athletes.filter(a=>a.academy_id===ac.id && fuzzyMatch(a.name,athleteSearch))
+                      })),{
+                        id:'unassigned', name:'Unassigned',
+                        members:athletes.filter(a=>!a.academy_id && fuzzyMatch(a.name,athleteSearch))
+                      }].filter(g=>g.members.length>0).map(group=>(
+                        <View key={group.id} style={{ marginBottom:12 }}>
+                          <View style={{ flexDirection:'row', alignItems:'center', gap:6,
+                            paddingVertical:6, borderBottomWidth:1, borderBottomColor:`${C.gold}33` }}>
+                            <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5,
+                              textTransform:'uppercase', flex:1,
+                              color:group.id==='unassigned'?C.muted:C.gold }}>{group.name}</Txt>
+                            <Cap style={{ fontSize:8 }}>{group.members.length}</Cap>
+                          </View>
+                          {group.members.map(a=>{
+                            const role=allUsers.find(u=>u.user_id===a.user_id)?.role;
+                            return (
+                              <View key={a.id} style={{ flexDirection:'row', alignItems:'center',
+                                gap:10, paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.faint }}>
+                                <View style={{ width:30, height:30, borderRadius:15,
+                                  backgroundColor:BELT_AVATAR_COLORS[a.belt]||BELT_AVATAR_COLORS.white,
+                                  alignItems:'center', justifyContent:'center' }}>
+                                  <Txt style={{ fontSize:10, fontFamily:F.semi, color:C.text }}>
+                                    {getInitials(a.name)}
+                                  </Txt>
+                                </View>
+                                <View style={{ flex:1 }}>
+                                  <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+                                    <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>{a.name}</Txt>
+                                    {role==='coach'&&<View style={{ borderWidth:.5, borderColor:`${C.teal}55`, paddingHorizontal:4, paddingVertical:1 }}>
+                                      <Txt style={{ fontSize:7, color:C.teal, fontFamily:F.semi }}>COACH</Txt>
+                                    </View>}
+                                    {role==='admin'&&<View style={{ borderWidth:.5, borderColor:`${C.gold}55`, paddingHorizontal:4, paddingVertical:1 }}>
+                                      <Txt style={{ fontSize:7, color:C.gold, fontFamily:F.semi }}>ADMIN</Txt>
+                                    </View>}
+                                  </View>
+                                  <Cap style={{ fontSize:8, marginTop:1 }}>
+                                    {a.belt} belt{a.stripes?` · ${a.stripes} stripe${a.stripes!==1?'s':''}`:''}
+                                  </Cap>
+                                </View>
+                                <TouchableOpacity onPress={()=>setEditingAthlete(a)} activeOpacity={0.75}
+                                  style={{ borderWidth:1, borderColor:`${C.gold}55`,
+                                    paddingHorizontal:8, paddingVertical:4, borderRadius:4 }}>
+                                  <Txt style={{ fontSize:9, color:C.gold }}>✎ Edit</Txt>
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* ── ACADEMY SETTINGS ── */}
+                  {key==='academy' && (
+                    <View style={{ padding:14 }}>
+                      {academies.map(ac=>(
+                        <View key={ac.id} style={{ flexDirection:'row', alignItems:'center',
+                          gap:10, paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.faint }}>
+                          <View style={{ flex:1 }}>
+                            <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text }}>{ac.name}</Txt>
+                            {ac.location?<Cap style={{ fontSize:9, marginTop:2 }}>{ac.location}</Cap>:null}
+                          </View>
+                        </View>
+                      ))}
+                      <Cap style={{ marginTop:14, marginBottom:8 }}>Add / find academy</Cap>
+                      <TextInput value={academySearch} onChangeText={setAcademySearch}
+                        placeholder="Search or create academy…" placeholderTextColor={C.muted}
+                        style={{ borderWidth:1, borderColor:C.borderMid, color:C.text,
+                          fontSize:13, fontFamily:F.body, padding:10,
+                          backgroundColor:C.faint, marginBottom:6 }}/>
+                      {academySearch.trim().length > 0 && (
+                        <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card }}>
+                          {academies.filter(ac=>fuzzyMatch(ac.name,academySearch)).map(ac=>(
+                            <TouchableOpacity key={ac.id} onPress={()=>setAcademySearch('')}
+                              activeOpacity={0.75}
+                              style={{ padding:10, borderBottomWidth:1, borderBottomColor:C.faint }}>
+                              <Txt style={{ fontSize:12, color:C.text }}>{ac.name}</Txt>
+                              {ac.location?<Cap style={{ fontSize:9 }}>{ac.location}</Cap>:null}
+                            </TouchableOpacity>
+                          ))}
+                          {/* No match — offer to create */}
+                          {academies.filter(ac=>fuzzyMatch(ac.name,academySearch)).length===0 && (
+                            <TouchableOpacity onPress={async()=>{
+                              const {data}=await supabase.from('academies')
+                                .insert({name:academySearch.trim(),created_by:session?.user?.id})
+                                .select().single();
+                              if(data){ setAcademies(p=>[...p,data]); setAcademySearch('');
+                                setManageMsg(`✓ Academy "${data.name}" created.`);
+                                setTimeout(()=>setManageMsg(''),3000); }
+                            }} activeOpacity={0.75}
+                              style={{ padding:10, flexDirection:'row', alignItems:'center', gap:8 }}>
+                              <Txt style={{ fontSize:12, color:C.teal, flex:1 }}>
+                                Create "{academySearch}"
+                              </Txt>
+                              <Cap style={{ color:C.teal, fontSize:9 }}>+ Create</Cap>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                </View>
+              )}
             </View>
-            <View style={{ padding:14 }}>
-              <Txt style={{ fontSize:12, color:C.textDim, lineHeight:18, marginBottom:12 }}>
-                Send an invite link via email. The athlete clicks the link and sets their own password.
-              </Txt>
-              <Cap style={{ marginBottom:6 }}>Email to Invite</Cap>
-              <TextInput value={inviteEmail} onChangeText={setInviteEmail}
-                placeholder="athlete@email.com" placeholderTextColor={C.muted}
-                autoCapitalize="none" keyboardType="email-address"
-                style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                  fontFamily:F.body, padding:10, backgroundColor:C.faint, marginBottom:12 }}/>
-              <TouchableOpacity onPress={sendInvite} disabled={manageLoading||!inviteEmail.trim()} activeOpacity={0.8}
-                style={{ backgroundColor:!inviteEmail.trim()?C.faint:C.amber, padding:14, alignItems:'center' }}>
-                {manageLoading
-                  ? <ActivityIndicator color={C.offWhite}/>
-                  : <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:2, textTransform:'uppercase', color:'#0F0F0D' }}>Send Invite</Txt>}
-              </TouchableOpacity>
-            </View>
-          </View>
+          ))}
 
           {/* Status message */}
           {manageMsg ? (
-            <View style={{ marginBottom:16, padding:12, borderWidth:1,
+            <View style={{ marginBottom:16, padding:12, borderWidth:1, borderRadius:6,
               borderColor:manageMsg.startsWith('✓')?`${C.sage}55`:`${C.red}55`,
               backgroundColor:manageMsg.startsWith('✓')?`${C.sage}15`:`${C.red}15` }}>
               <Txt style={{ fontSize:12, color:manageMsg.startsWith('✓')?C.sage:C.red }}>{manageMsg}</Txt>
             </View>
           ) : null}
 
-          {/* Published Class Logs */}
-          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
-            <View style={{ flexDirection:'row', alignItems:'center', padding:14,
-              borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
-              <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2,
-                textTransform:'uppercase', color:C.textDim, flex:1 }}>Published Class Logs</Txt>
-              <TouchableOpacity onPress={()=>setShowClassLog(true)} activeOpacity={0.75}
-                style={{ borderWidth:1, borderColor:`${C.teal}55`, backgroundColor:`${C.teal}15`,
-                  paddingHorizontal:8, paddingVertical:4 }}>
-                <Txt style={{ fontSize:8, fontFamily:F.semi, color:C.teal, letterSpacing:1,
-                  textTransform:'uppercase' }}>+ New</Txt>
-              </TouchableOpacity>
-            </View>
-            <View style={{ padding:14 }}>
-              {coachClassLogs.length === 0 ? (
-                <Cap style={{ textAlign:'center', color:C.muted }}>No class logs yet. Tap + New to publish one.</Cap>
-              ) : coachClassLogs.map(cl => {
-                const st = SESSION_TYPES.find(s=>s.key===cl.session_type)||SESSION_TYPES[0];
-                const techNames = (cl.techniques||[]).map(t=>t.name).filter(Boolean);
-                return (
-                  <View key={cl.id} style={{ borderWidth:1, borderColor:C.border,
-                    marginBottom:10, borderRadius:6, overflow:'hidden' }}>
-                    <View style={{ flexDirection:'row', alignItems:'center', padding:10,
-                      backgroundColor:C.faint, borderBottomWidth:1, borderBottomColor:C.faint }}>
-                      <Txt style={{ fontSize:13, marginRight:6 }}>{st.icon}</Txt>
-                      <View style={{ flex:1 }}>
-                        <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>
-                          {st.label} · {cl.date}
-                        </Txt>
-                        <Cap style={{ fontSize:7, marginTop:2 }}>
-                          {techNames.slice(0,3).join(', ')}{techNames.length>3?` +${techNames.length-3} more`:''}
-                        </Cap>
-                      </View>
-                      <TouchableOpacity onPress={()=>startEditClassLog(cl)} activeOpacity={0.75}
-                        style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:`${C.gold}10`,
-                          paddingHorizontal:8, paddingVertical:4, marginRight:6, borderRadius:4 }}>
-                        <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.gold }}>✎ Edit</Txt>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={async()=>{
-                        await db.deleteClassLog(cl.id);
-                        setCoachClassLogs(prev=>prev.filter(c=>c.id!==cl.id));
-                      }} activeOpacity={0.75}
-                        style={{ borderWidth:1, borderColor:`${C.red}44`, backgroundColor:`${C.red}10`,
-                          paddingHorizontal:8, paddingVertical:4, borderRadius:4 }}>
-                        <Txt style={{ fontSize:9, fontFamily:F.semi, color:C.red }}>✕</Txt>
+          {/* Athlete profile edit modal */}
+          {editingAthlete && (
+            <Modal visible transparent animationType="fade" onRequestClose={()=>setEditingAthlete(null)}>
+              <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
+                <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(0,0,0,0.85)',
+                  justifyContent:'center', padding:20 }}>
+                  <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, padding:20 }}>
+                    <View style={{ flexDirection:'row', alignItems:'center', marginBottom:16 }}>
+                      <Txt style={{ fontSize:15, fontFamily:F.bold, flex:1 }}>Edit Profile</Txt>
+                      <TouchableOpacity onPress={()=>setEditingAthlete(null)} activeOpacity={0.75}>
+                        <Txt style={{ color:C.muted, fontSize:20 }}>✕</Txt>
                       </TouchableOpacity>
                     </View>
-                    {cl.notes ? (
-                      <View style={{ padding:10 }}>
-                        <Txt style={{ fontSize:11, color:C.textDim, fontStyle:'italic' }}>"{cl.notes}"</Txt>
+                    <Cap style={{ marginBottom:6 }}>Name</Cap>
+                    <TextInput value={editingAthlete.name||''}
+                      onChangeText={v=>setEditingAthlete(e=>({...e,name:v}))}
+                      style={{ borderWidth:1, borderColor:C.borderMid, color:C.text,
+                        fontSize:13, fontFamily:F.body, padding:10, marginBottom:12 }}/>
+                    <Cap style={{ marginBottom:8 }}>Belt</Cap>
+                    <Cap style={{ marginBottom:6, color:C.muted, fontSize:8 }}>Juvenile</Cap>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:8 }}>
+                      <View style={{ flexDirection:'row', gap:6 }}>
+                        {JUVENILE_BELTS.map(b=>{const bc=BELT_COLORS[b];return(
+                          <TouchableOpacity key={b} onPress={()=>setEditingAthlete(e=>({...e,belt:b}))}
+                            activeOpacity={0.75}
+                            style={{ paddingHorizontal:8, paddingVertical:6, borderWidth:2,
+                              borderColor:editingAthlete.belt===b?C.gold:C.border,
+                              backgroundColor:editingAthlete.belt===b?bc.bg:C.faint }}>
+                            <Txt style={{ fontSize:8, fontFamily:F.semi, color:editingAthlete.belt===b?bc.text:C.muted }}>
+                              {bc.label}
+                            </Txt>
+                          </TouchableOpacity>
+                        );})}
                       </View>
-                    ) : null}
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
-            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
-              <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim, flex:1 }}>Academies</Txt>
-            </View>
-            <View style={{ padding:14 }}>
-              {academies.map(ac=>(
-                <View key={ac.id} style={{ flexDirection:'row', alignItems:'center', paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.faint }}>
-                  <View style={{ flex:1 }}>
-                    <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text }}>{ac.name}</Txt>
-                    {ac.location&&<Cap style={{ fontSize:7, marginTop:2 }}>{ac.location}</Cap>}
-                    <Cap style={{ fontSize:7, marginTop:2, color:C.muted }}>
-                      {athletes.filter(a=>a.academy_id===ac.id).length} athletes
-                    </Cap>
-                  </View>
-                </View>
-              ))}
-              {/* Create new academy */}
-              <View style={{ marginTop:12 }}>
-                <Cap style={{ marginBottom:6 }}>Create New Academy</Cap>
-                <View style={{ flexDirection:'row', gap:8 }}>
-                  <TextInput
-                    placeholder="Academy name…" placeholderTextColor={C.muted}
-                    style={{ flex:1, borderWidth:1, borderColor:C.borderMid, color:C.text,
-                      fontSize:13, fontFamily:F.body, padding:10, backgroundColor:C.faint }}
-                    onSubmitEditing={e=>createAcademy(e.nativeEvent.text)}
-                    returnKeyType="done"/>
-                </View>
-                <Cap style={{ color:C.muted, marginTop:4 }}>Press Enter to create</Cap>
-              </View>
-            </View>
-          </View>
-
-          {/* Assign coach */}
-          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
-            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
-              <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Assign Coach Role</Txt>
-            </View>
-            <View style={{ padding:14 }}>
-              <Cap style={{ marginBottom:8 }}>Select Academy for New Coach</Cap>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
-                <View style={{ flexDirection:'row', gap:6 }}>
-                  {academies.map(ac=>(
-                    <TouchableOpacity key={ac.id} onPress={()=>setNewCoachAcademy(ac.name)} activeOpacity={0.75}
-                      style={{ paddingHorizontal:12, paddingVertical:8, borderWidth:1,
-                        borderColor:newCoachAcademy===ac.name?C.gold:C.border,
-                        backgroundColor:newCoachAcademy===ac.name?C.goldDim:'transparent' }}>
-                      <Txt style={{ fontSize:11, color:newCoachAcademy===ac.name?C.gold:C.textDim }}>{ac.name}</Txt>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-
-              <Cap style={{ marginBottom:8 }}>Tap an athlete to make them a coach</Cap>
-              {athletes.filter(a => {
-                const role = allUsers.find(u => u.user_id === a.user_id)?.role;
-                return role === 'athlete' || !role;
-              }).map(a => (
-                <TouchableOpacity key={a.id} onPress={()=>assignCoach(a.user_id, a.name||'Unnamed')}
-                  disabled={manageLoading} activeOpacity={0.75}
-                  style={{ flexDirection:'row', alignItems:'center', gap:10, padding:12,
-                    marginBottom:6, borderWidth:1, borderColor:C.border, backgroundColor:C.faint }}>
-                  <ProfileAvatar name={a.name||'?'} size={28} belt={a.belt||'white'}/>
-                  <View style={{ flex:1 }}>
-                    <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>{a.name||'Unnamed'}</Txt>
-                    <BeltBadge belt={a.belt||'white'} stripes={a.stripes||0} size="sm"/>
-                  </View>
-                  <View style={{ borderWidth:1, borderColor:`${C.teal}55`, paddingHorizontal:8, paddingVertical:4 }}>
-                    <Txt style={{ fontSize:8, color:C.teal, fontFamily:F.semi, letterSpacing:1 }}>Make Coach</Txt>
-                  </View>
-                </TouchableOpacity>
-              ))}
-
-              {/* Current coaches */}
-              {allUsers.filter(u => u.role === 'coach').length > 0 && (
-                <View style={{ marginTop:12 }}>
-                  <Cap style={{ marginBottom:8, color:C.teal }}>Current Coaches</Cap>
-                  {allUsers.filter(u => u.role === 'coach').map(u => {
-                    const ath = athletes.find(a => a.user_id === u.user_id);
-                    const ac = academies.find(a => a.id === u.academy_id);
-                    return (
-                      <View key={u.user_id} style={{ flexDirection:'row', alignItems:'center', gap:8,
-                        padding:10, marginBottom:4, borderWidth:1, borderColor:`${C.teal}44`,
-                        backgroundColor:`${C.teal}0A` }}>
-                        <Txt style={{ fontSize:12, color:C.teal, fontFamily:F.semi, flex:1 }}>
-                          {ath?.name || 'Unknown'}
-                        </Txt>
-                        {ac && <Cap style={{ color:C.teal, fontSize:7 }}>{ac.name}</Cap>}
-                        <TouchableOpacity onPress={async ()=>{
-                          await supabase.from('user_roles')
-                            .update({ role:'athlete' })
-                            .eq('user_id', u.user_id);
-                          const { data: users } = await supabase.from('user_roles').select('user_id, role, academy_id');
-                          setAllUsers(users||[]);
-                          setManageMsg(`✓ ${ath?.name||'User'} changed back to athlete.`);
-                        }} activeOpacity={0.75}
-                          style={{ borderWidth:1, borderColor:`${C.red}44`, paddingHorizontal:6, paddingVertical:3 }}>
-                          <Txt style={{ fontSize:8, color:C.red, fontFamily:F.semi }}>Remove</Txt>
+                    </ScrollView>
+                    <Cap style={{ marginBottom:6, color:C.muted, fontSize:8 }}>Adult</Cap>
+                    <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6, marginBottom:12 }}>
+                      {ADULT_BELTS.map(b=>{const bc=BELT_COLORS[b];return(
+                        <TouchableOpacity key={b} onPress={()=>setEditingAthlete(e=>({...e,belt:b}))}
+                          activeOpacity={0.75}
+                          style={{ paddingHorizontal:10, paddingVertical:6, borderWidth:2,
+                            borderColor:editingAthlete.belt===b?C.gold:C.border,
+                            backgroundColor:editingAthlete.belt===b?bc.bg:C.faint }}>
+                          <Txt style={{ fontSize:8, fontFamily:F.semi, color:editingAthlete.belt===b?bc.text:C.muted }}>
+                            {bc.label}
+                          </Txt>
                         </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-
-              {manageMsg ? (
-                <View style={{ marginTop:10, padding:10, borderWidth:1,
-                  borderColor:manageMsg.startsWith('✓')?`${C.sage}55`:`${C.red}55`,
-                  backgroundColor:manageMsg.startsWith('✓')?`${C.sage}15`:`${C.red}15` }}>
-                  <Txt style={{ fontSize:12, color:manageMsg.startsWith('✓')?C.sage:C.red }}>{manageMsg}</Txt>
-                </View>
-              ) : null}
-            </View>
-          </View>
-
-          {/* Assign athletes to academies */}
-          <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, marginBottom:16 }}>
-            <View style={{ flexDirection:'row', alignItems:'center', padding:14, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:C.faint }}>
-              <View style={{ width:3, height:14, backgroundColor:C.amber, marginRight:10 }}/>
-              <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Athlete → Academy</Txt>
-            </View>
-            <View style={{ padding:14 }}>
-              {athletes.map(a=>(
-                <View key={a.id} style={{ paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.faint }}>
-                  <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text, marginBottom:6 }}>{a.name||'Unnamed'}</Txt>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={{ flexDirection:'row', gap:6 }}>
-                      <TouchableOpacity onPress={()=>assignToAcademy(a.id, null)} activeOpacity={0.75}
-                        style={{ paddingHorizontal:10, paddingVertical:5, borderWidth:1,
-                          borderColor:!a.academy_id?C.red:C.border,
-                          backgroundColor:!a.academy_id?`${C.red}18`:'transparent' }}>
-                        <Txt style={{ fontSize:9, color:!a.academy_id?C.red:C.muted }}>None</Txt>
-                      </TouchableOpacity>
-                      {academies.map(ac=>(
-                        <TouchableOpacity key={ac.id} onPress={()=>assignToAcademy(a.id, ac.id)} activeOpacity={0.75}
-                          style={{ paddingHorizontal:10, paddingVertical:5, borderWidth:1,
-                            borderColor:a.academy_id===ac.id?C.gold:C.border,
-                            backgroundColor:a.academy_id===ac.id?C.goldDim:'transparent' }}>
-                          <Txt style={{ fontSize:9, color:a.academy_id===ac.id?C.gold:C.muted }}>{ac.name}</Txt>
+                      );})}
+                    </View>
+                    <Cap style={{ marginBottom:8 }}>Stripes</Cap>
+                    <View style={{ flexDirection:'row', gap:6, marginBottom:16 }}>
+                      {[0,1,2,3,4].map(s=>(
+                        <TouchableOpacity key={s} onPress={()=>setEditingAthlete(e=>({...e,stripes:s}))}
+                          activeOpacity={0.75}
+                          style={{ flex:1, paddingVertical:8, borderWidth:1, alignItems:'center',
+                            borderColor:editingAthlete.stripes===s?C.gold:C.border,
+                            backgroundColor:editingAthlete.stripes===s?C.goldDim:'transparent' }}>
+                          <Txt style={{ fontSize:13, fontFamily:F.display,
+                            color:editingAthlete.stripes===s?C.gold:C.muted }}>{s}</Txt>
                         </TouchableOpacity>
                       ))}
                     </View>
-                  </ScrollView>
-                </View>
-              ))}
-            </View>
-          </View>
+                    <Cap style={{ marginBottom:6 }}>Gym</Cap>
+                    <TextInput value={editingAthlete.gym||''}
+                      onChangeText={v=>setEditingAthlete(e=>({...e,gym:v}))}
+                      placeholder="Gym name…" placeholderTextColor={C.muted}
+                      style={{ borderWidth:1, borderColor:C.borderMid, color:C.text,
+                        fontSize:13, fontFamily:F.body, padding:10, marginBottom:16 }}/>
+                    <View style={{ flexDirection:'row', gap:8 }}>
+                      <TouchableOpacity onPress={async()=>{
+                        const {error}=await supabase.from('athletes')
+                          .update({name:editingAthlete.name,belt:editingAthlete.belt,
+                            stripes:editingAthlete.stripes,gym:editingAthlete.gym})
+                          .eq('id',editingAthlete.id);
+                        if(!error){
+                          setAthletes(p=>p.map(a=>a.id===editingAthlete.id?{...a,...editingAthlete}:a));
+                          setManageMsg(`✓ ${editingAthlete.name}'s profile updated.`);
+                          setTimeout(()=>setManageMsg(''),3000);
+                        }
+                        setEditingAthlete(null);
+                      }} activeOpacity={0.8}
+                        style={{ flex:1, backgroundColor:C.gold, padding:14, alignItems:'center' }}>
+                        <Txt style={{ fontSize:10, fontFamily:F.semi, color:'#0D0D0B',
+                          letterSpacing:1, textTransform:'uppercase' }}>Save changes</Txt>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={()=>setEditingAthlete(null)} activeOpacity={0.75}
+                        style={{ borderWidth:1, borderColor:C.border, paddingHorizontal:20,
+                          alignItems:'center', justifyContent:'center' }}>
+                        <Cap>Cancel</Cap>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </ScrollView>
+              </KeyboardAvoidingView>
+            </Modal>
+          )}
+
         </ScrollView>
 
       ) : (
@@ -6549,6 +6838,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [classLogs,       setClassLogs]       = useState([]);
   const [skippedLogIds,   setSkippedLogIds]   = useState(new Set());
   const [showTutorial,    setShowTutorial]    = useState(false);
+  const [showConsent,     setShowConsent]     = useState(false);
   const [showProfiles, setShowProfiles] = useState(false);
 
   const [tab,     setTab]     = useState('Track');
@@ -6606,13 +6896,14 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           setClassLogs(logs);
         }
 
-        // Load user settings (tutorial + skipped logs)
+        // Load user settings (tutorial + skipped logs + consent)
         if (!impersonatedAthlete && session?.user) {
           const settings = await db.getUserSettings(session.user.id);
           if (!settings.tutorial_done) setShowTutorial(true);
           if (settings.skipped_logs?.length) {
             setSkippedLogIds(new Set(settings.skipped_logs));
           }
+          if (!settings.consent_agreed) setShowConsent(true);
         }
       } catch (e) { console.error('Load error:', e); }
       setLoading(false);
@@ -7017,8 +7308,18 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           confirm={confirm}/>
       )}
 
+      {/* Consent modal — shown before tutorial if not yet agreed */}
+      {showConsent && (
+        <ConsentModal
+          onAgree={async()=>{
+            setShowConsent(false);
+            if (session?.user) await db.recordConsent(session.user.id);
+          }}
+          onDecline={()=>supabase.auth.signOut()}/>
+      )}
+
       {/* Tutorial overlay — shown on first login, dismissed permanently */}
-      {showTutorial && (
+      {!showConsent && showTutorial && (
         <TutorialOverlay
           onDone={dismissTutorial}
           onSkip={dismissTutorial}/>
