@@ -299,14 +299,14 @@ const db = {
 
   // ── Academy Leaderboard ───────────────────────────────────────────────────────
   async getAcademyLeaderboard(academyId) {
-    // Fetch athletes, their training days, rolls, and competitions for the academy
-    const [{ data: aths }, { data: days }, { data: rolls }, { data: comps }] = await Promise.all([
+    const [{ data: academy }, { data: aths }, { data: days }, { data: rolls }, { data: comps }] = await Promise.all([
+      supabase.from('academies').select('id, name, location').eq('id', academyId).maybeSingle(),
       supabase.from('athletes').select('id, name, belt, stripes, user_id').eq('academy_id', academyId),
       supabase.from('training_days').select('athlete_id, date'),
       supabase.from('rolls').select('athlete_id, started_at, roll_result, event_log'),
       supabase.from('competitions').select('athlete_id, rounds:competition_rounds(result)'),
     ]);
-    return { athletes: aths||[], days: days||[], rolls: rolls||[], comps: comps||[] };
+    return { academy: academy||null, athletes: aths||[], days: days||[], rolls: rolls||[], comps: comps||[] };
   },
   async getUserSettings(userId) {
     const { data } = await supabase.from('user_settings')
@@ -2754,7 +2754,7 @@ function AcademyScreen({ athlete, session }) {
     </View>
   );
 
-  const { athletes=[], days=[], rolls=[], comps=[] } = leaderData || {};
+  const { academy=null, athletes=[], days=[], rolls=[], comps=[] } = leaderData || {};
 
   // Period cutoff
   const now = new Date();
@@ -2864,7 +2864,10 @@ function AcademyScreen({ athlete, session }) {
 
       {/* Header */}
       <View style={{ marginBottom:16 }}>
-        <Txt style={{ fontSize:20, fontFamily:F.display, color:C.text }}>Grounded Skills Lab</Txt>
+        <Txt style={{ fontSize:20, fontFamily:F.display, color:C.text }}>
+          {academy?.name || 'Academy'}
+        </Txt>
+        {academy?.location ? <Cap style={{ marginTop:2, color:C.gold }}>{academy.location}</Cap> : null}
         <Cap style={{ marginTop:4 }}>{athletes.length} members</Cap>
       </View>
 
