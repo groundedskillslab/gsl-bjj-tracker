@@ -887,7 +887,7 @@ function OptionList({ items, onPick, pts, accent, showPts=true,
                       allTechniques=[] }) {
   const suggestions = customVal.trim().length > 0
     ? allTechniques.filter(t =>
-        t.toLowerCase().includes(customVal.toLowerCase()) &&
+        fuzzyMatch(t, customVal) &&
         !items.includes(t)
       ).slice(0, 5)
     : [];
@@ -1604,13 +1604,13 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
                   <View>
                     {/* Predictive suggestions */}
                     {customSub.trim().length > 0 && submissions.filter(s =>
-                      s.toLowerCase().includes(customSub.toLowerCase())
+                      fuzzyMatch(s, customSub)
                     ).length > 0 && (
                       <ScrollView horizontal showsHorizontalScrollIndicator={false}
                         keyboardShouldPersistTaps="always" style={{ marginBottom:8 }}>
                         <View style={{ flexDirection:'row', gap:6 }}>
                           {submissions.filter(s =>
-                            s.toLowerCase().includes(customSub.toLowerCase())
+                            fuzzyMatch(s, customSub)
                           ).slice(0,5).map(s => (
                             <TouchableOpacity key={s} onPress={()=>{ setSubName(s); setCustomSub(''); setShowC(false); }}
                               activeOpacity={0.75}
@@ -3667,7 +3667,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                       keyboardShouldPersistTaps="always" style={{ marginTop:4 }}>
                       <View style={{ flexDirection:'row', gap:4 }}>
                         {allTechniques.filter(t=>
-                          t.toLowerCase().includes(tech.name.toLowerCase()) && t!==tech.name
+                          fuzzyMatch(t, tech.name) && t!==tech.name
                         ).slice(0,4).map(s=>(
                           <TouchableOpacity key={s} onPress={()=>updateTech(i,'name',s)}
                             activeOpacity={0.75}
@@ -3932,7 +3932,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                 fontFamily:F.body, padding:10, marginBottom:12, backgroundColor:C.faint }}/>
 
             {sorted
-              .filter(([name])=>!techSearch.trim()||name.toLowerCase().includes(techSearch.toLowerCase()))
+              .filter(([name])=>!techSearch.trim()||fuzzyMatch(name, techSearch))
               .map(([name, appearances]) => {
                 const learned   = appearances.filter(a=>a.outcome==='learned').length;
                 const attempted = appearances.filter(a=>a.outcome==='attempted').length;
