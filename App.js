@@ -347,7 +347,8 @@ const db = {
   async createClassLog(log) {
     const { data, error } = await supabase.from('class_logs').insert({
       id: uid(), coach_id: log.coachId, academy_id: log.academyId,
-      date: log.date, session_type: log.sessionType,
+      date: log.date, class_time: log.classTime || '', title: log.title || '',
+      session_type: log.sessionType,
       techniques: log.techniques, notes: log.notes,
     }).select().single();
     if (error) throw error;
@@ -355,7 +356,9 @@ const db = {
   },
   async updateClassLog(id, updates) {
     const { error } = await supabase.from('class_logs').update({
-      date: updates.date, session_type: updates.sessionType,
+      date: updates.date, class_time: updates.classTime || '',
+      title: updates.title || '',
+      session_type: updates.sessionType,
       techniques: updates.techniques, notes: updates.notes,
     }).eq('id', id);
     if (error) throw error;
@@ -3598,7 +3601,11 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                     <Txt style={{ color:C.muted, fontSize:20 }}>✕</Txt>
                   </TouchableOpacity>
                 </View>
-                <Cap style={{ color:C.teal, marginBottom:16 }}>{importingLog.date}</Cap>
+                <Cap style={{ color:C.teal, marginBottom:16 }}>
+                  {importingLog?.title || SESSION_TYPES.find(s=>s.key===importingLog?.session_type)?.label || 'Class'}
+                  {importingLog?.class_time ? ` · ${importingLog.class_time}` : ''}
+                  {' · '}{importingLog?.date}
+                </Cap>
 
                 {/* Coach's techniques — adjustable outcomes */}
                 <Cap style={{ marginBottom:8 }}>From coach's class — set your outcomes</Cap>
@@ -3702,7 +3709,7 @@ function JournalScreen({ journal, setJournal, athlete, allTechniques=[], classLo
                   <Txt style={{ fontSize:20 }}>{st.icon}</Txt>
                   <View style={{ flex:1 }}>
                     <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text, marginBottom:2 }}>
-                      {st.label} · {cl.date}
+                      {cl.title || st.label}{cl.class_time ? ` · ${cl.class_time}` : ''} · {cl.date}
                     </Txt>
                     <Cap style={{ fontSize:9, color:C.teal, marginBottom:8 }}>{techNames}{(cl.techniques||[]).length>3?` +${(cl.techniques||[]).length-3} more`:''}</Cap>
                     <TouchableOpacity onPress={()=>startImport(cl)} activeOpacity={0.75}
@@ -5604,6 +5611,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   const [coachClassLogs,  setCoachClassLogs]  = useState([]);
   const [classLogTechs,   setClassLogTechs]   = useState([{ name:'', notes:'', url:'' }]);
   const [classLogDate,    setClassLogDate]     = useState(new Date().toISOString().split('T')[0]);
+  const [classLogTime,    setClassLogTime]     = useState('');
+  const [classLogTitle,   setClassLogTitle]    = useState('');
   const [classLogType,    setClassLogType]     = useState('class');
   const [classLogNotes,   setClassLogNotes]    = useState('');
   const [classLogSaving,  setClassLogSaving]   = useState(false);
@@ -5693,12 +5702,15 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
       if (editingClassLog) {
         // Update existing
         await db.updateClassLog(editingClassLog.id, {
-          date: classLogDate, sessionType: classLogType,
+          date: classLogDate, classTime: classLogTime,
+          title: classLogTitle, sessionType: classLogType,
           techniques: validTechs, notes: classLogNotes,
         });
         setCoachClassLogs(prev => prev.map(cl =>
           cl.id === editingClassLog.id
-            ? { ...cl, date: classLogDate, session_type: classLogType, techniques: validTechs, notes: classLogNotes }
+            ? { ...cl, date: classLogDate, class_time: classLogTime,
+                title: classLogTitle, session_type: classLogType,
+                techniques: validTechs, notes: classLogNotes }
             : cl
         ));
         setManageMsg('✓ Class log updated.');
@@ -5706,7 +5718,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
         // Create new
         const newLog = await db.createClassLog({
           coachId: session.user.id, academyId: myAcademyId,
-          date: classLogDate, sessionType: classLogType,
+          date: classLogDate, classTime: classLogTime,
+          title: classLogTitle, sessionType: classLogType,
           techniques: validTechs, notes: classLogNotes,
         });
         setCoachClassLogs(prev => [newLog, ...prev]);
@@ -5715,7 +5728,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
       setShowClassLog(false);
       setEditingClassLog(null);
       setClassLogTechs([{ name:'', notes:'', url:'' }]);
-      setClassLogNotes('');
+      setClassLogNotes(''); setClassLogTitle(''); setClassLogTime('');
       setClassLogDate(new Date().toISOString().split('T')[0]);
       setClassLogType('class');
     } catch(e) { setManageMsg('❌ ' + (e.message || 'Failed to save')); }
@@ -5725,6 +5738,8 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   const startEditClassLog = (cl) => {
     setEditingClassLog(cl);
     setClassLogDate(cl.date);
+    setClassLogTime(cl.class_time || '');
+    setClassLogTitle(cl.title || '');
     setClassLogType(cl.session_type);
     setClassLogTechs(cl.techniques?.length ? cl.techniques.map(t=>({name:t.name||'',notes:t.notes||'',url:t.url||''})) : [{ name:'', notes:'', url:'' }]);
     setClassLogNotes(cl.notes || '');
@@ -5990,7 +6005,9 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
                             gap:8, paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.faint }}>
                             <Txt style={{ fontSize:16 }}>{st.icon}</Txt>
                             <View style={{ flex:1 }}>
-                              <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>{st.label} · {cl.date}</Txt>
+                              <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.text }}>
+                                {cl.title||st.label}{cl.class_time?` · ${cl.class_time}`:''} · {cl.date}
+                              </Txt>
                               <Cap style={{ fontSize:8, marginTop:2 }} numberOfLines={1}>
                                 {(cl.techniques||[]).map(t=>t.name).filter(Boolean).slice(0,3).join(', ')}
                               </Cap>
@@ -6729,7 +6746,25 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
               <TextInput value={classLogDate} onChangeText={setClassLogDate}
                 placeholder="YYYY-MM-DD" placeholderTextColor={C.muted}
                 style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
-                  fontFamily:F.body, padding:10, marginBottom:14 }}/>
+                  fontFamily:F.body, padding:10, marginBottom:10 }}/>
+
+              {/* Time and class name side by side */}
+              <View style={{ flexDirection:'row', gap:8, marginBottom:10 }}>
+                <View style={{ flex:1 }}>
+                  <Cap style={{ marginBottom:6 }}>Time</Cap>
+                  <TextInput value={classLogTime} onChangeText={setClassLogTime}
+                    placeholder="e.g. 6:00 PM" placeholderTextColor={C.muted}
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                      fontFamily:F.body, padding:10 }}/>
+                </View>
+                <View style={{ flex:2 }}>
+                  <Cap style={{ marginBottom:6 }}>Class name (optional)</Cap>
+                  <TextInput value={classLogTitle} onChangeText={setClassLogTitle}
+                    placeholder="e.g. Fundamentals, No-Gi…" placeholderTextColor={C.muted}
+                    style={{ borderWidth:1, borderColor:C.borderMid, color:C.text, fontSize:13,
+                      fontFamily:F.body, padding:10 }}/>
+                </View>
+              </View>
               <Cap style={{ marginBottom:8 }}>Session type</Cap>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }}>
                 <View style={{ flexDirection:'row', gap:6 }}>
@@ -7493,7 +7528,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
             <TouchableOpacity onPress={()=>setTab('Journal')} activeOpacity={0.85} style={{ flex:1 }}>
               <Txt style={{ fontSize:12, fontFamily:F.semi, color:C.teal }}>
                 {pending.length === 1
-                  ? `New class log — ${latest.date}`
+                  ? `${latest.title||st.label}${latest.class_time ? ' · '+latest.class_time : ''} — ${latest.date}`
                   : `${pending.length} unimported class logs`}
               </Txt>
               <Cap style={{ fontSize:8, color:C.teal, marginTop:2 }}>Tap to open Journal and import</Cap>
