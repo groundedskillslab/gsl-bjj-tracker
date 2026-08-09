@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "Grounded Skills Lab",
+    "name": "MatAnalyst",
     "slug": "gsl-bjj-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#0F0F0D",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#EDE9DF",
     "splash": {
-      "backgroundColor": "#0F0F0D",
+      "backgroundColor": "#EDE9DF",
       "resizeMode": "contain"
     },
     "ios": {
@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0F0F0D"
+        "backgroundColor": "#EDE9DF"
       },
       "package": "com.gsl.bjjtracker",
       "screenOrientation": "portrait"
@@ -26,11 +26,11 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
       "output": "single",
-      "name": "Grounded Skills Lab",
-      "shortName": "GSL BJJ",
-      "description": "BJJ analytics and training tracker",
-      "themeColor": "#C8A24D",
-      "backgroundColor": "#0D0D0B",
+      "name": "MatAnalyst",
+      "shortName": "MatAnalyst",
+      "description": "BJJ analytics and training tracker by Grounded Skills Lab",
+      "themeColor": "#C95F3D",
+      "backgroundColor": "#EDE9DF",
       "display": "standalone",
       "orientation": "portrait"
     },
