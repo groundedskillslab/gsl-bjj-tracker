@@ -1,7 +1,8 @@
 /**
- * GROUNDED SKILLS LAB — BJJ TRACKER
+ * MATANALYST — BJJ TRACKER
+ * by Grounded Skills Lab
  * React Native / Expo App — Supabase Edition
- * Train. Measure. Improve. Repeat.
+ * A smarter way to analyze your game.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -32,75 +33,76 @@ const SIDE_INSET = 0;
 // ─── Theme Palettes ────────────────────────────────────────────────────────────
 const DARK = {
   bg:        '#0D0D0B',
-  surface:   '#141412',
-  card:      '#1C1C18',
-  border:    '#2C2C26',
-  borderMid: '#3C3C34',
-  charcoal:  '#1C1C1E',
+  surface:   '#161613',
+  card:      '#1E1E1A',
+  border:    '#2E2E28',
+  borderMid: '#3E3E36',
+  charcoal:  '#0D0D0D',
   stone:     '#9A9A8E',
-  sand:      '#DCCC86',
+  sand:      '#C9B896',
   offWhite:  '#F5F3EF',
-  sage:      '#5A9E50',  // brighter green for legibility
-  gold:      '#C8A24D',
-  goldLight: '#E2C87A',
-  goldSoft:  'rgba(200,162,77,0.15)',
-  goldDim:   'rgba(200,162,77,0.08)',
-  green:     '#5A9E50',
-  red:       '#C04040',  // brighter red
-  amber:     '#C8A24D',
-  amberSoft: 'rgba(200,162,77,0.15)',
-  teal:      '#3A9E8E',  // brighter teal
-  blue:      '#5A82A0',
-  opp:       '#8B7A9A',
-  oppSoft:   'rgba(139,122,154,0.15)',
-  oppDim:    '#3A3244',
+  sage:      '#8AA378',  // Olive, brightened for dark-bg legibility
+  gold:      '#D97C5C',  // Rust, brightened for dark-bg legibility
+  goldLight: '#E39A80',
+  goldSoft:  'rgba(217,124,92,0.16)',
+  goldDim:   'rgba(217,124,92,0.08)',
+  green:     '#8AA378',
+  red:       '#C25A45',  // brighter brick for legibility
+  amber:     '#C9A25E',
+  amberSoft: 'rgba(201,162,94,0.15)',
+  teal:      '#7A9088',  // brighter muted sage-teal
+  blue:      '#7C8B98',
+  opp:       '#A08A82',
+  oppSoft:   'rgba(160,138,130,0.15)',
+  oppDim:    '#3A3430',
   text:      '#F0EDE6',  // warm white — main text
   textDim:   '#C0BDB5',  // secondary text — clearly readable
-  muted:     '#7A7870',  // muted labels — not too dark
+  muted:     '#8C8778',  // muted labels — not too dark
   faint:     '#222220',
 };
 
 const LIGHT = {
-  bg:        '#F5F3EF',
-  surface:   '#FFFFFF',
-  card:      '#F0EDE8',
-  border:    '#DEDAD4',
-  borderMid: '#C8C4BC',
-  charcoal:  '#1C1C1E',
-  stone:     '#5A5A56',
-  sand:      '#B89A4A',
-  offWhite:  '#1C1C1E',
-  sage:      '#2E7E24',  // stronger green
-  gold:      '#9A7030',
-  goldLight: '#C8A24D',
-  goldSoft:  'rgba(154,112,48,0.12)',
-  goldDim:   'rgba(154,112,48,0.07)',
-  green:     '#2E7E24',
-  red:       '#B03030',  // stronger red
-  amber:     '#8A6A20',
-  amberSoft: 'rgba(138,106,32,0.12)',
-  teal:      '#1A6A60',  // stronger teal
-  blue:      '#2A4A6A',
-  opp:       '#5A4A70',
-  oppSoft:   'rgba(90,74,112,0.12)',
-  oppDim:    '#E8E4F0',
-  text:      '#1A1A1C',  // near-black for max contrast
-  textDim:   '#3A3A3E',
-  muted:     '#6A6A70',
-  faint:     '#E8E4DC',
+  // MatAnalyst — Option D (Black / Bone / Rust / Olive / Soft Gray)
+  bg:        '#EDE9DF',  // Bone — page wash
+  surface:   '#F1F1F1',  // Soft Gray — header/nav surface
+  card:      '#FFFFFF',
+  border:    '#E3DFD3',
+  borderMid: '#D3CDBC',
+  charcoal:  '#0D0D0D',  // Black
+  stone:     '#6B6B63',
+  sand:      '#C9B896',
+  offWhite:  '#FAF8F4',
+  sage:      '#4F5C44',  // Olive, darkened for AA text contrast on light bg
+  gold:      '#B5502F',  // Rust, darkened for AA text contrast on light bg
+  goldLight: '#C95F3D',
+  goldSoft:  'rgba(201,95,61,0.13)',
+  goldDim:   'rgba(201,95,61,0.07)',
+  green:     '#4F5C44',
+  red:       '#8B3A2A',
+  amber:     '#8A6A34',
+  amberSoft: 'rgba(138,106,52,0.13)',
+  teal:      '#465049',
+  blue:      '#44515C',
+  opp:       '#5E4C46',
+  oppSoft:   'rgba(94,76,70,0.13)',
+  oppDim:    '#E8DFD8',
+  text:      '#17160F',  // near-black
+  textDim:   '#4A473F',
+  muted:     '#7A7566',
+  faint:     '#F7F4EE',
 };
 
 // ThemeContext — provides current palette to all components
-const ThemeContext = React.createContext(DARK);
+const ThemeContext = React.createContext(LIGHT);  // MatAnalyst is light-first (Option D)
 const useTheme = () => React.useContext(ThemeContext);
 
 // Global mutable C reference — updated when theme switches
 // Components that use C directly (outside render) reference this
-let C = { ...DARK };
+let C = { ...LIGHT };  // MatAnalyst is light-first (Option D)
 
-const PIE_DARK  = ['#C8A24D','#7A8F72','#5A7A72','#4A6280','#9B4040','#B89A4A','#DCCC86','#8E8E82','#6B5E7A'];
-const PIE_LIGHT = ['#9A7030','#4A6E40','#2A5A52','#2A4A6A','#8B2A2A','#8A6A20','#B89A4A','#6A6660','#5A4A70'];
-let PIE = [...PIE_DARK];
+const PIE_DARK  = ['#D97C5C','#8AA378','#7A9088','#7C8B98','#C25A45','#C9A25E','#C9B896','#9A9A8E','#A08A82'];
+const PIE_LIGHT = ['#B5502F','#4F5C44','#465049','#44515C','#8B3A2A','#8A6A34','#C9B896','#6B6B63','#5E4C46'];
+let PIE = [...PIE_LIGHT];  // MatAnalyst is light-first (Option D)
 
 // ─── IBJJF Scoring ─────────────────────────────────────────────────────────────
 const SCORE_EVENTS = {
@@ -495,12 +497,12 @@ const F = {
   medium:  'Inter_500Medium',
   semi:    'Inter_600SemiBold',
   bold:    'Inter_700Bold',
-  display: 'DMSerifDisplay_400Regular',
+  display: 'Inter_700Bold',   // MatAnalyst style guide specifies Inter throughout — no serif
   // Aliases so existing fontFamily references still resolve
   light:   'Inter_400Regular',
   regular: 'Inter_400Regular',
   extra:   'Inter_700Bold',
-  black:   'DMSerifDisplay_400Regular',
+  black:   'Inter_700Bold',
 };
 
 // ─── Reusable style helpers ─────────────────────────────────────────────────────
@@ -609,21 +611,45 @@ function useConfirm() {
   return [confirm, Dialog];
 }
 
-// ─── GSL Logo — uses the actual brand PNG asset ────────────────────────────────
-const GSL_LOGO = require('./assets/icon.png');
+// ─── MatAnalyst primary logo — 5-panel modular mark (Option D) ────────────────
+const MATANALYST_ICON = require('./assets/icon.png');  // same filename app.json already points to for the OS icon
 
-function GSLLogo({ size=32 }) {
+function AppLogo({ size=32 }) {
   return (
     <Image
-      source={GSL_LOGO}
+      source={MATANALYST_ICON}
       style={{ width:size, height:size, borderRadius: size * 0.13 }}
       resizeMode="contain"
     />
   );
 }
 
-function GSLLogoHero({ size=80 }) {
-  return <GSLLogo size={size}/>;
+function AppLogoHero({ size=80 }) {
+  return <AppLogo size={size}/>;
+}
+
+// ─── GSL parent-brand mark — real monogram, transparent, gold stroke only.
+// Use only for small "by Grounded Skills Lab" credit lines, never as the
+// primary in-app logo. ──────────────────────────────────────────────────────
+const GSL_MARK = require('./assets/gsl_mark.png');
+
+function GSLMark({ size=16 }) {
+  return (
+    <Image
+      source={GSL_MARK}
+      style={{ width:size, height:size }}
+      resizeMode="contain"
+    />
+  );
+}
+
+function GSLCredit({ size=13, color, fontSize=9 }) {
+  return (
+    <View style={{ flexDirection:'row', alignItems:'center', gap:5 }}>
+      <GSLMark size={size}/>
+      <Txt style={{ fontSize, color: color || C.muted, letterSpacing:0.3 }}>by Grounded Skills Lab</Txt>
+    </View>
+  );
 }
 
 
@@ -1523,7 +1549,7 @@ function StartRollModal({ visible, onStart, onCancel }) {
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
         <View style={{ flex:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:380, padding:24 }}>
-            <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
+            <Cap style={{ marginBottom:4 }}>MatAnalyst</Cap>
             <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>Start New Roll</Txt>
             <FieldInput label="Partner Name (Optional)" value={partner} onChangeText={setPartner} placeholder="Training partner…"/>
             <View style={{ flexDirection:'row', gap:8, marginTop:8 }}>
@@ -1564,7 +1590,7 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
         <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
-            <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
+            <Cap style={{ marginBottom:4 }}>MatAnalyst</Cap>
             <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>How did it end?</Txt>
             <View style={{ flexDirection:'row', gap:8, marginBottom:20 }}>
               <ETBtn type="time" icon="⏱" label="Time Expired" desc="Match ended on the clock"/>
@@ -1705,7 +1731,7 @@ function RollCard({ roll, index, onView, onDelete, confirm }) {
 function CompetitionsList({ comps, onSelect, onNew }) {
   if (!comps.length) return (
     <View style={{ alignItems:'center', paddingVertical:60 }}>
-      <GSLLogo size={56}/>
+      <AppLogo size={56}/>
       <View style={{ width:30, height:1, backgroundColor:C.gold, marginTop:16, marginBottom:16 }}/>
       <Cap style={{ marginBottom:20 }}>No competitions recorded</Cap>
       <Btn label="Record Competition" onPress={onNew} style={{ paddingHorizontal:28 }}/>
@@ -1776,9 +1802,9 @@ function ProfileScreen({ profiles, activeProfileId, onSelect, onNew, onEdit, onD
     <View style={{ flex:1, backgroundColor:C.bg, paddingTop: TOP_INSET }}>
       <View style={{ backgroundColor:C.surface, borderBottomWidth:1, borderBottomColor:C.border, padding:20 }}>
         <View style={{ flexDirection:'row', alignItems:'center', gap:14 }}>
-          <GSLLogo size={44}/>
+          <AppLogo size={44}/>
           <View>
-            <Txt style={{ fontSize:11, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.text, lineHeight:15 }}>Grounded Skills Lab</Txt>
+            <Txt style={{ fontSize:11, fontFamily:F.display, letterSpacing:1, color:C.text, lineHeight:15 }}>Mat<Txt style={{ fontFamily:F.display, color:C.gold }}>Analyst</Txt></Txt>
             <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginTop:4 }}>
               <View style={{ width:16, height:1, backgroundColor:C.gold }}/>
               <Cap style={{ fontSize:7, color:C.gold, letterSpacing:2 }}>Select Profile</Cap>
@@ -1825,8 +1851,8 @@ function ProfileScreen({ profiles, activeProfileId, onSelect, onNew, onEdit, onD
           <Cap style={{ letterSpacing:2.5 }}>New Profile</Cap>
         </TouchableOpacity>
         <View style={{ alignItems:'center', gap:10 }}>
-          <GSLLogo size={32}/>
-          <Cap style={{ textAlign:'center', color:C.border, marginTop:4 }}>Train. Measure. Improve. Repeat.</Cap>
+          <AppLogo size={32}/>
+          <Cap style={{ textAlign:'center', color:C.border, marginTop:4 }}>A smarter way to analyze your game.</Cap>
         </View>
       </ScrollView>
 
@@ -2100,7 +2126,7 @@ function CompModal({ visible, initial, onSave, onCancel }) {
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
         <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
-            <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
+            <Cap style={{ marginBottom:4 }}>MatAnalyst</Cap>
             <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>{initial?'Edit Competition':'New Competition'}</Txt>
 
             <FieldInput label="Competition Name *" value={name} onChangeText={setName} placeholder="e.g. IBJJF Pan Championship"/>
@@ -3137,7 +3163,7 @@ function ConsentModal({ onAgree, onDecline }) {
               </Txt>
             </View>
             <Cap style={{ color:'rgba(13,13,11,0.65)', fontSize:9 }}>
-              Grounded Skills Lab · Version {CONSENT_VERSION}
+              MatAnalyst · Version {CONSENT_VERSION}
             </Cap>
           </View>
 
@@ -3157,7 +3183,7 @@ function ConsentModal({ onAgree, onDecline }) {
               1. Purpose
             </Txt>
             <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:14 }}>
-              You are participating in a closed beta test of the GSL BJJ Tracker app ("the App"),
+              You are participating in a closed beta test of the MatAnalyst app ("the App"),
               operated by Grounded Skills Lab. This agreement governs your use of the App during the
               beta testing period.
             </Txt>
@@ -4863,15 +4889,15 @@ function TrackScreen({ activeRoll, onStartRoll, onEndRoll, onTogglePause, onMuta
       {!activeRoll ? (
         <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:32 }}>
           {/* Large logo mark — centrepiece */}
-          <GSLLogo size={100}/>
+          <AppLogo size={100}/>
           <View style={{ width:40, height:2, backgroundColor:C.gold, marginTop:20, marginBottom:20 }}/>
           {/* Profile identity */}
           <Txt style={{ fontSize:9, color:C.muted, letterSpacing:4, textTransform:'uppercase', marginBottom:6, textAlign:'center' }}>{activeProfile?.name||'Athlete'}</Txt>
           <View style={{ marginBottom:8 }}><BeltBadge belt={activeProfile?.belt||'white'} stripes={activeProfile?.stripes||0} size="lg"/></View>
           {activeProfile?.gym ? <Txt style={{ fontSize:9, color:C.muted, letterSpacing:1, marginBottom:28 }}>{activeProfile.gym}</Txt> : <View style={{ height:28 }}/>}
           {/* Brand tagline */}
-          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.text, letterSpacing:-0.5, textAlign:'center', lineHeight:28 }}>Train. Measure.</Txt>
-          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.gold, letterSpacing:-0.5, textAlign:'center', lineHeight:28, marginBottom:36 }}>Improve. Repeat.</Txt>
+          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.text, letterSpacing:-0.5, textAlign:'center', lineHeight:28 }}>A smarter way to</Txt>
+          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.gold, letterSpacing:-0.5, textAlign:'center', lineHeight:28, marginBottom:36 }}>analyze your game.</Txt>
           {/* CTA */}
           <TouchableOpacity onPress={()=>setShowStart(true)} activeOpacity={0.8}
             style={{ backgroundColor:C.gold, paddingHorizontal:44, paddingVertical:16, alignItems:'center' }}>
@@ -5072,7 +5098,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
           <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
             <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
               <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
-                <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
+                <Cap style={{ marginBottom:4 }}>MatAnalyst</Cap>
                 <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>How did the round end?</Txt>
 
                 {/* End type buttons */}
@@ -5521,7 +5547,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   const [compsMap,   setCompsMap]  = useState({});
   const [daysMap,    setDaysMap]   = useState({});
   const [loading,    setLoading]   = useState(true);
-  const [isDark,     setIsDark]    = useState(true);
+  const [isDark,     setIsDark]    = useState(false);  // MatAnalyst is light-first (Option D)
   const [activeView, setActiveView] = useState('athletes'); // 'athletes' | 'manage'
 
   // Manage panel state
@@ -5835,7 +5861,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
       {/* Header */}
       <View style={{ backgroundColor:C.surface, borderBottomWidth:1, borderBottomColor:C.border, padding:12 }}>
         <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
-          <GSLLogo size={28}/>
+          <AppLogo size={28}/>
           <View style={{ flex:1 }}>
             <Txt style={{ fontSize:11, fontFamily:F.display, letterSpacing:2, textTransform:'uppercase', color:C.text }}>
               {isAdmin ? 'Admin Dashboard' : 'Coach Dashboard'}
@@ -6521,7 +6547,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
             {/* Detail panel */}
             {!selected ? (
               <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
-                <GSLLogo size={48}/>
+                <AppLogo size={48}/>
                 <View style={{ width:30, height:2, backgroundColor:C.gold, marginVertical:14 }}/>
                 <Cap>{sidebarOpen ? 'Select an athlete to view their data' : 'Tap ☰ to see athletes'}</Cap>
               </View>
@@ -6929,10 +6955,10 @@ function AuthScreen({ onAuth }) {
         <ScrollView contentContainerStyle={{ flexGrow:1, alignItems:'center', justifyContent:'center', padding:32 }}>
 
           {/* Logo + wordmark */}
-          <GSLLogo size={80}/>
+          <AppLogo size={80}/>
           <View style={{ width:40, height:2, backgroundColor:C.gold, marginTop:20, marginBottom:8 }}/>
-          <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.text, marginBottom:2 }}>Grounded</Txt>
-          <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.gold, marginBottom:40 }}>Skills Lab</Txt>
+          <Txt style={{ fontSize:20, fontFamily:F.display, letterSpacing:0.5, color:C.text, marginBottom:2 }}>Mat<Txt style={{ fontFamily:F.display, color:C.gold }}>Analyst</Txt></Txt>
+          <View style={{ marginTop:8, marginBottom:40 }}><GSLCredit/></View>
 
           {/* Form */}
           <View style={{ width:'100%', maxWidth:380 }}>
@@ -7004,7 +7030,7 @@ function AuthScreen({ onAuth }) {
           </View>
 
           <Txt style={{ fontSize:8, color:C.border, letterSpacing:2, textTransform:'uppercase', marginTop:48 }}>
-            Train. Measure. Improve. Repeat.
+            A smarter way to analyze your game.
           </Txt>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -7089,7 +7115,7 @@ export default function App() {
 // ─── Main App (authenticated) ─────────────────────────────────────────────────
 function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onStopImpersonating }) {
   // ── Theme state ─────────────────────────────────────────────────────────────
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);  // MatAnalyst is light-first (Option D)
   const toggleTheme = () => {
     setIsDark(prev => {
       const next = !prev;
@@ -7116,7 +7142,6 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
       'Inter_500Medium':     { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZ9hiJ-Ek-_EeA.woff2' },
       'Inter_600SemiBold':   { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYAZ9hiJ-Ek-_EeA.woff2' },
       'Inter_700Bold':       { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYAZ9hiJ-Ek-_EeA.woff2' },
-      'DMSerifDisplay_400Regular': { uri: 'https://fonts.gstatic.com/s/dmserifdisplay/v15/-nFnOHM81r4j6k0gjALR8uVua8QHJbkn_E3OSQ.woff2' },
     }).then(() => setFontsLoaded(true)).catch(() => setFontsLoaded(true));
   }, []);
 
@@ -7360,7 +7385,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   if (!fontsLoaded || loading) return (
     <View style={{ flex:1, backgroundColor:C.bg, alignItems:'center', justifyContent:'center', paddingTop:TOP_INSET }}>
       <StatusBar barStyle={isDark?'light-content':'dark-content'}/>
-      <GSLLogo size={56}/>
+      <AppLogo size={56}/>
       <View style={{ width:30, height:2, backgroundColor:C.gold, marginTop:16, marginBottom:16 }}/>
       <ActivityIndicator color={C.gold} size="large"/>
       <Cap style={{ marginTop:16 }}>
@@ -7419,10 +7444,10 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           {/* Row 1: Logo + wordmark + controls */}
           <View style={{ flexDirection:'row', alignItems:'center', paddingTop:10, paddingBottom:8, gap:8 }}>
             {/* Logo */}
-            <GSLLogo size={30}/>
+            <AppLogo size={30}/>
             {/* Wordmark */}
             <View style={{ marginLeft:2 }}>
-              <Txt style={{ fontSize:12, fontFamily:F.semi, letterSpacing:0.5, color:C.gold, lineHeight:15 }}>Grounded Skills Lab</Txt>
+              <Txt style={{ fontSize:12, fontFamily:F.semi, letterSpacing:0.5, color:C.text, lineHeight:15 }}>Mat<Txt style={{ fontFamily:F.semi, color:C.gold }}>Analyst</Txt></Txt>
               <Txt style={{ fontSize:9, fontFamily:F.body, color:C.muted, lineHeight:12 }}>BJJ Analytics</Txt>
             </View>
             {/* Spacer */}
