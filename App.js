@@ -611,21 +611,27 @@ function useConfirm() {
   return [confirm, Dialog];
 }
 
-// ─── MatAnalyst primary logo — 5-panel modular mark (Option D) ────────────────
-const MATANALYST_ICON = require('./assets/icon.png');  // same filename app.json already points to for the OS icon
+// ─── MatAnalyst primary logo — official mark, 4 modules rotated around center.
+// Vector source: matanalyst_mark_primary.svg. Recolored to the app's Black/Charcoal
+// token so it stays consistent with the rest of the Option D palette. Transparent
+// background — this is the in-app mark, not the OS icon tile (see assets/icon.png
+// for that, built from the separate "app icon" variant with its own dark tile). ──
+const MARK_MODULE_D = "M 394.0,150.0 H 788.0 Q 850.0,150.0 850.0,212.0 V 298.0 Q 850.0,360.0 788.0,360.0 H 394.0 Z";
 
-function AppLogo({ size=32 }) {
+function AppLogo({ size=32, color }) {
+  const fill = color || C.charcoal;
   return (
-    <Image
-      source={MATANALYST_ICON}
-      style={{ width:size, height:size, borderRadius: size * 0.13 }}
-      resizeMode="contain"
-    />
+    <Svg width={size} height={size} viewBox="0 0 1000 1000">
+      <Path d={MARK_MODULE_D} transform="rotate(0 500 500)" fill={fill}/>
+      <Path d={MARK_MODULE_D} transform="rotate(90 500 500)" fill={fill}/>
+      <Path d={MARK_MODULE_D} transform="rotate(180 500 500)" fill={fill}/>
+      <Path d={MARK_MODULE_D} transform="rotate(270 500 500)" fill={fill}/>
+    </Svg>
   );
 }
 
-function AppLogoHero({ size=80 }) {
-  return <AppLogo size={size}/>;
+function AppLogoHero({ size=80, color }) {
+  return <AppLogo size={size} color={color}/>;
 }
 
 // ─── GSL parent-brand mark — real monogram, transparent, gold stroke only.
