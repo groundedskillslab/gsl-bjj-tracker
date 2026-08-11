@@ -2267,6 +2267,67 @@ const TARGET_OUTCOMES = [
   { key:'no',        label:'No',        color:'#993C1D', bg:'#FAECE7' },
 ];
 
+// ── Position taxonomy ────────────────────────────────────────────────────────
+// Reuses the app's own DEF_POS list as the canonical position vocabulary
+// (same names already used for position-timer tracking elsewhere). Maps each
+// *default* technique to where it starts/ends so chains actually flow —
+// entry lands somewhere → advance must plausibly start there → finish must
+// be a submission that's actually live from wherever the advance landed.
+// Custom (user-added) techniques have no entry here and are treated as
+// position-agnostic — they're allowed anywhere rather than excluded, since
+// we have no data to constrain them by.
+const TECH_POSITIONS = {
+  takedown: {
+    'Double Leg':'Side Control', 'Single Leg':'Side Control', 'Ankle Pick':'Side Control',
+    'Duck Under':'Back Control', 'Uchi Mata':'Side Control', 'Hip Throw':'Side Control',
+    'Foot Sweep':'Side Control', 'Knee Tap':'Side Control', 'Blast Double':'Side Control',
+    'Headlock Throw':'Side Control',
+  },
+  guardPull: {
+    'Collar Drag':'Back Control', 'Arm Drag':'Back Control', 'Jump Closed Guard':'Closed Guard',
+    'Pull Butterfly':'Open Guard', 'Pull Half Guard':'Half Guard', 'Pull X-Guard':'Open Guard',
+    'Pull Spider Guard':'Open Guard', 'Pull De La Riva':'Open Guard', 'Sit-to-Guard':'Guard',
+    'Lapel Pull':'Open Guard',
+  },
+  sweep: {
+    from: {
+      'Scissor Sweep':'Closed Guard', 'Flower Sweep':'Closed Guard', 'Hip Bump':'Closed Guard',
+      'Butterfly Sweep':'Open Guard', 'X-Guard':'Open Guard', 'Long Step':'Open Guard',
+      'Hook Sweep':'Half Guard', 'Tripod Sweep':'Open Guard', 'Sickle Sweep':'Open Guard',
+    },
+    to: {
+      'Scissor Sweep':'Mount', 'Flower Sweep':'Mount', 'Hip Bump':'Mount',
+      'Butterfly Sweep':'Mount', 'X-Guard':'Side Control', 'Long Step':'Side Control',
+      'Hook Sweep':'Mount', 'Tripod Sweep':'Mount', 'Sickle Sweep':'Mount',
+    },
+  },
+  guardPass: {
+    from: {
+      'High Guard Pass':'Closed Guard', 'Low Guard Pass':'Closed Guard', 'Torreando':'Open Guard',
+      'X-Pass':'Open Guard', 'Over-Under':'Half Guard', 'Leg Drag':'Half Guard',
+      'Stack Pass':'Open Guard', 'Smash Pass':'Half Guard',
+    },
+    to: {
+      'High Guard Pass':'Side Control', 'Low Guard Pass':'Side Control', 'Torreando':'Side Control',
+      'X-Pass':'Side Control', 'Over-Under':'Side Control', 'Leg Drag':'Side Control',
+      'Stack Pass':'Mount', 'Smash Pass':'Side Control',
+    },
+  },
+  // Submissions can be live from more than one position — any single match counts.
+  submission: {
+    'Rear Naked Choke':['Back Control'],
+    'Triangle':['Closed Guard','Guard','Mount'],
+    'Armbar':['Mount','Closed Guard','Guard','Side Control'],
+    'Guillotine':['Closed Guard','Guard','Turtle'],
+    'Kimura':['Side Control','Closed Guard','Guard','Turtle','Mount'],
+    'Heel Hook':['Half Guard','Open Guard'],
+    'Ezekiel':['Mount','Guard'],
+    "D'Arce":['Side Control','Turtle'],
+    'Anaconda':['Turtle','Side Control'],
+    'Bow & Arrow':['Back Control'],
+  },
+};
+
 function computeJournalTechStats(journal) {
   const stats = {};
   (journal || []).flatMap(e => e.techniques || []).forEach(t => {
@@ -2285,22 +2346,30 @@ function aggregateRollCounts(rolls, field) {
   return out;
 }
 
-// Single-target picks: prefer "taught but never tested live" (closes the exact
-// gap the Journal insights already flag), fall back to least-practiced-live,
-// fall back to random — so it's never a dead end even with little data logged.
-function pickGapFirst(pool, journalStats, rollCounts) {
-  if (!pool.length) return null;
-  const gap = pool.filter(name => {
-    const s = journalStats[name];
-    return s && s.learned > 0 && !s.attempted && !s.finished;
-  });
-  if (gap.length) return gap[Math.floor(Math.random() * gap.length)];
-  const sorted = [...pool].sort((a, b) => (rollCounts[a] || 0) - (rollCounts[b] || 0));
-  return sorted[0];
+// Single-target pick: biased to techniques actually taught in class (per
+// Journal entries), split into "needs testing live" (learned, never finished —
+// the exact gap the app's own insights already flag) vs "proven, reinforce it"
+// (already finished at least once). Weighted 65/35 toward needs-testing.
+// Only falls through to the full default/custom pool if nothing's been
+// logged for that category yet, so an empty Journal still produces something.
+function pickTaughtBiased(pool, journalStats, rollCounts) {
+  if (!pool.length) return { technique: null, bucket: null };
+  const taught       = pool.filter(name => journalStats[name]);
+  const needsTesting = taught.filter(name => journalStats[name].learned > 0 && !journalStats[name].finished);
+  const proven       = taught.filter(name => journalStats[name].finished > 0);
+
+  if (needsTesting.length && (Math.random() < 0.65 || !proven.length)) {
+    return { technique: needsTesting[Math.floor(Math.random()*needsTesting.length)], bucket:'needs-testing' };
+  }
+  if (proven.length) {
+    return { technique: proven[Math.floor(Math.random()*proven.length)], bucket:'proven' };
+  }
+  const sorted = [...pool].sort((a,b) => (rollCounts[a]||0) - (rollCounts[b]||0));
+  return { technique: sorted[0], bucket:'variety' };
 }
 
-// Chain-step picks: prefer techniques with real live success so the chain is
-// actually achievable, not aspirational — falls back to random from the pool.
+// Chain-step pick: prefer techniques with real live success so the chain is
+// achievable, optionally pre-filtered to a set of position-valid candidates.
 function pickProvenFirst(pool, rollCounts) {
   if (!pool.length) return null;
   const proven = pool.filter(name => (rollCounts[name] || 0) > 0);
@@ -2321,40 +2390,67 @@ function generateSingleTarget({ journal, rolls, submissions, sweeps, takedowns, 
   };
   const cat = category || ['submission', 'sweep', 'takedown', 'guardPass', 'guardPull'][Math.floor(Math.random() * 5)];
   const { list, counts } = pools[cat];
-  const technique = pickGapFirst(list, journalStats, counts);
+  const { technique, bucket } = pickTaughtBiased(list, journalStats, counts);
   if (!technique) return null;
   return {
-    id: uid(), mode: 'single', gi: null,
-    source: journalStats[technique]?.learned ? 'gap' : 'variety',
+    id: uid(), mode: 'single', gi: null, source: bucket,
     steps: [{ category: cat, technique, outcome: null }],
     resolvedAt: null,
   };
 }
 
-function generateChainTarget({ rolls, takedowns, guardPulls, sweeps, submissions }) {
+// Chain target — entry type determines the whole downstream flow so each step
+// plausibly starts where the last one ended:
+//   Guard Pull  → lands a guard (bottom)  → Sweep from that same guard   → top position → Submission live from there
+//   Takedown    → lands top / a scramble  → Guard Pass (opponent recovers) → top position → Submission live from there
+// Falls back to an unconstrained pick within the category if position data
+// or Journal data doesn't cover the specific technique (e.g. custom entries).
+function generateChainTarget({ journal, rolls, takedowns, guardPulls, sweeps, submissions }) {
+  const journalStats = computeJournalTechStats(journal);
+  const taughtNames  = new Set(Object.keys(journalStats));
+  const restrictToTaught = pool => { const t = pool.filter(x => taughtNames.has(x)); return t.length ? t : pool; };
+
   const tdCounts  = aggregateRollCounts(rolls, 'transCounts'); // shared by takedowns + guard pulls
   const swCounts  = aggregateRollCounts(rolls, 'sweepCounts');
   const gpCounts  = aggregateRollCounts(rolls, 'guardPassCounts');
   const subCounts = aggregateRollCounts(rolls, 'subCounts');
 
-  const entryPool = [...new Set([...takedowns, ...guardPulls])];
-  const entryTech = pickProvenFirst(entryPool, tdCounts);
-  const entryCat  = takedowns.includes(entryTech) ? 'takedown' : 'guardPull';
+  const useGuardPull = guardPulls.length && (!takedowns.length || Math.random() < 0.5);
+  const entryCat   = useGuardPull ? 'guardPull' : 'takedown';
+  const entryPool  = restrictToTaught(useGuardPull ? guardPulls : takedowns);
+  const entryTech  = pickProvenFirst(entryPool, tdCounts);
+  if (!entryTech) return null;
+  const entryEndPos = useGuardPull ? TECH_POSITIONS.guardPull[entryTech] : TECH_POSITIONS.takedown[entryTech];
 
-  const advancePool = [...new Set([...sweeps, ...DEF_GUARD_PASSES])];
-  const advCounts   = { ...swCounts, ...gpCounts };
-  const advTech     = pickProvenFirst(advancePool, advCounts);
-  const advCat      = sweeps.includes(advTech) ? 'sweep' : 'guardPass';
+  let advCat, advTech, advEndPos;
+  if (useGuardPull) {
+    advCat = 'sweep';
+    let pool = restrictToTaught(sweeps).filter(t => !entryEndPos || !TECH_POSITIONS.sweep.from[t] || TECH_POSITIONS.sweep.from[t] === entryEndPos);
+    if (!pool.length) pool = restrictToTaught(sweeps);
+    advTech = pickProvenFirst(pool, swCounts);
+    advEndPos = advTech ? (TECH_POSITIONS.sweep.to[advTech] || null) : null;
+  } else {
+    advCat = 'guardPass';
+    const pool = restrictToTaught(DEF_GUARD_PASSES);
+    advTech = pickProvenFirst(pool, gpCounts);
+    advEndPos = advTech ? (TECH_POSITIONS.guardPass.to[advTech] || null) : null;
+  }
+  if (!advTech) return null;
 
-  const finishTech = pickProvenFirst(submissions, subCounts);
+  let subPool = restrictToTaught(submissions).filter(t => {
+    const valid = TECH_POSITIONS.submission[t];
+    return !advEndPos || !valid || valid.includes(advEndPos);
+  });
+  if (!subPool.length) subPool = restrictToTaught(submissions);
+  const finishTech = pickProvenFirst(subPool, subCounts);
+  if (!finishTech) return null;
 
-  if (!entryTech || !advTech || !finishTech) return null;
   return {
     id: uid(), mode: 'chain', gi: null, source: 'chain',
     steps: [
-      { category: entryCat,     technique: entryTech,  outcome: null },
-      { category: advCat,       technique: advTech,    outcome: null },
-      { category: 'submission', technique: finishTech, outcome: null },
+      { category: entryCat,     technique: entryTech,  outcome: null, toPos: entryEndPos || null },
+      { category: advCat,       technique: advTech,    outcome: null, fromPos: (useGuardPull ? entryEndPos : null), toPos: advEndPos || null },
+      { category: 'submission', technique: finishTech, outcome: null, fromPos: advEndPos || null },
     ],
     resolvedAt: null,
   };
@@ -2389,6 +2485,11 @@ function TargetCard({ target, onSetOutcome, onDelete }) {
                 <View style={{ flex:1 }}>
                   <Cap style={{ fontSize:8, color:cfg.color }}>{cfg.label}</Cap>
                   <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text }}>{step.technique}</Txt>
+                  {(step.fromPos || step.toPos) && (
+                    <Txt style={{ fontSize:9, color:C.muted, marginTop:1 }}>
+                      {step.fromPos || (i===0 ? 'Standing' : 'opponent recovers')} → {step.toPos || 'finish'}
+                    </Txt>
+                  )}
                 </View>
               </View>
               <View style={{ flexDirection:'row', gap:6 }}>
@@ -2429,7 +2530,7 @@ function TargetsScreen({ targets, setTargets, athlete, rolls, journal, submissio
     if (!athlete?.id) return;
     setGenerating(true);
     const draft = mode==='chain'
-      ? generateChainTarget({ rolls, takedowns, guardPulls, sweeps, submissions })
+      ? generateChainTarget({ journal, rolls, takedowns, guardPulls, sweeps, submissions })
       : generateSingleTarget({ journal, rolls, submissions, sweeps, takedowns, guardPulls });
     if (!draft) {
       setGenerating(false);
