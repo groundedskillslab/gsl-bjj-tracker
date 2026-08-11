@@ -175,6 +175,7 @@ const ADULT_BELTS    = BELT_ORDER.filter(b => !BELT_COLORS[b]?.juvenile);
 const TABS = [
   { key:'Track',    label:'Track',    icon:'🥋' },
   { key:'Journal',  label:'Journal',  icon:'📖' },
+  { key:'Targets',  label:'Targets',  icon:'🎯' },
   { key:'Academy',  label:'Academy',  icon:'🏫' },
   { key:'Charts',   label:'Charts',   icon:'📊' },
   { key:'Rolls',    label:'Rolls',    icon:'⚔️' },
@@ -409,6 +410,27 @@ const db = {
   async deleteCompetition(id) {
     await supabase.from('competitions').delete().eq('id', id);
   },
+
+  // ── Targets ───────────────────────────────────────────────────────────────────
+  async getTargets(athleteId) {
+    const { data } = await supabase.from('targets').select('*')
+      .eq('athlete_id', athleteId).order('created_at', { ascending: false });
+    return (data || []).map(fromDbTarget);
+  },
+  async createTarget(target) {
+    const { data, error } = await supabase.from('targets').insert(toDbTarget(target)).select().single();
+    if (error) { console.error('createTarget error:', error.message); throw error; }
+    return fromDbTarget(data);
+  },
+  async updateTargetSteps(id, steps, resolvedAt) {
+    const { error } = await supabase.from('targets')
+      .update({ steps, resolved_at: resolvedAt })
+      .eq('id', id);
+    if (error) console.error('updateTargetSteps error:', error.message);
+  },
+  async deleteTarget(id) {
+    await supabase.from('targets').delete().eq('id', id);
+  },
 };
 
 // ── Shape converters: app ↔ database ─────────────────────────────────────────
@@ -486,6 +508,23 @@ function fromDbComp(c) {
     bracketSize: c.bracket_size || '',
     medal: c.medal || 'none',
     rounds: (c.competition_rounds || []).map(fromDbRound),
+  };
+}
+
+function toDbTarget(t) {
+  return {
+    id: t.id, athlete_id: t.athleteId, mode: t.mode,
+    gi: t.gi || null, source: t.source || null,
+    steps: t.steps || [], resolved_at: t.resolvedAt || null,
+    roll_id: t.rollId || null,
+  };
+}
+function fromDbTarget(t) {
+  return {
+    id: t.id, athleteId: t.athlete_id, mode: t.mode,
+    gi: t.gi, source: t.source,
+    steps: t.steps || [], resolvedAt: t.resolved_at,
+    rollId: t.roll_id, createdAt: t.created_at,
   };
 }
 
@@ -2206,6 +2245,284 @@ function CompModal({ visible, initial, onSave, onCancel }) {
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+// ─── Targets — config, generation logic, screen ─────────────────────────────────
+// A "target" challenges the athlete to land a technique (single) or a linked
+// opener → advance → finish sequence (chain) that was either taught in class
+// but never tested live, or already proven live and worth chaining together.
+// Outcome per step is manual for now (Landed / Attempted / No) — auto-detection
+// from the live roll event log is a planned v2.
+const TARGET_STEP_CFG = {
+  submission: { label:'Submission', color:C.red,  icon:'🔒' },
+  sweep:      { label:'Sweep',      color:C.gold, icon:'↺' },
+  takedown:   { label:'Takedown',   color:C.blue, icon:'↓' },
+  guardPass:  { label:'Guard Pass', color:C.teal, icon:'→' },
+  guardPull:  { label:'Guard Pull', color:C.sage, icon:'⬇' },
+};
+const TARGET_OUTCOMES = [
+  { key:'landed',    label:'Landed',    color:'#1D9E75', bg:'#E1F5EE' },
+  { key:'attempted', label:'Attempted', color:'#BA7517', bg:'#FAEEDA' },
+  { key:'no',        label:'No',        color:'#993C1D', bg:'#FAECE7' },
+];
+
+function computeJournalTechStats(journal) {
+  const stats = {};
+  (journal || []).flatMap(e => e.techniques || []).forEach(t => {
+    if (!t.name?.trim()) return;
+    if (!stats[t.name]) stats[t.name] = { learned:0, attempted:0, finished:0 };
+    stats[t.name][t.outcome] = (stats[t.name][t.outcome] || 0) + 1;
+  });
+  return stats;
+}
+
+function aggregateRollCounts(rolls, field) {
+  const out = {};
+  (rolls || []).forEach(r => {
+    Object.entries(r[field] || {}).forEach(([name, count]) => { out[name] = (out[name] || 0) + count; });
+  });
+  return out;
+}
+
+// Single-target picks: prefer "taught but never tested live" (closes the exact
+// gap the Journal insights already flag), fall back to least-practiced-live,
+// fall back to random — so it's never a dead end even with little data logged.
+function pickGapFirst(pool, journalStats, rollCounts) {
+  if (!pool.length) return null;
+  const gap = pool.filter(name => {
+    const s = journalStats[name];
+    return s && s.learned > 0 && !s.attempted && !s.finished;
+  });
+  if (gap.length) return gap[Math.floor(Math.random() * gap.length)];
+  const sorted = [...pool].sort((a, b) => (rollCounts[a] || 0) - (rollCounts[b] || 0));
+  return sorted[0];
+}
+
+// Chain-step picks: prefer techniques with real live success so the chain is
+// actually achievable, not aspirational — falls back to random from the pool.
+function pickProvenFirst(pool, rollCounts) {
+  if (!pool.length) return null;
+  const proven = pool.filter(name => (rollCounts[name] || 0) > 0);
+  const source = proven.length ? proven : pool;
+  const sorted = [...source].sort((a, b) => (rollCounts[b] || 0) - (rollCounts[a] || 0));
+  const topN = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.4)));
+  return topN[Math.floor(Math.random() * topN.length)];
+}
+
+function generateSingleTarget({ journal, rolls, submissions, sweeps, takedowns, guardPulls, category }) {
+  const journalStats = computeJournalTechStats(journal);
+  const pools = {
+    submission: { list: submissions, counts: aggregateRollCounts(rolls, 'subCounts') },
+    sweep:      { list: sweeps,      counts: aggregateRollCounts(rolls, 'sweepCounts') },
+    takedown:   { list: takedowns,   counts: aggregateRollCounts(rolls, 'transCounts') },
+    guardPull:  { list: guardPulls,  counts: aggregateRollCounts(rolls, 'transCounts') },
+    guardPass:  { list: DEF_GUARD_PASSES, counts: aggregateRollCounts(rolls, 'guardPassCounts') },
+  };
+  const cat = category || ['submission', 'sweep', 'takedown', 'guardPass', 'guardPull'][Math.floor(Math.random() * 5)];
+  const { list, counts } = pools[cat];
+  const technique = pickGapFirst(list, journalStats, counts);
+  if (!technique) return null;
+  return {
+    id: uid(), mode: 'single', gi: null,
+    source: journalStats[technique]?.learned ? 'gap' : 'variety',
+    steps: [{ category: cat, technique, outcome: null }],
+    resolvedAt: null,
+  };
+}
+
+function generateChainTarget({ rolls, takedowns, guardPulls, sweeps, submissions }) {
+  const tdCounts  = aggregateRollCounts(rolls, 'transCounts'); // shared by takedowns + guard pulls
+  const swCounts  = aggregateRollCounts(rolls, 'sweepCounts');
+  const gpCounts  = aggregateRollCounts(rolls, 'guardPassCounts');
+  const subCounts = aggregateRollCounts(rolls, 'subCounts');
+
+  const entryPool = [...new Set([...takedowns, ...guardPulls])];
+  const entryTech = pickProvenFirst(entryPool, tdCounts);
+  const entryCat  = takedowns.includes(entryTech) ? 'takedown' : 'guardPull';
+
+  const advancePool = [...new Set([...sweeps, ...DEF_GUARD_PASSES])];
+  const advCounts   = { ...swCounts, ...gpCounts };
+  const advTech     = pickProvenFirst(advancePool, advCounts);
+  const advCat      = sweeps.includes(advTech) ? 'sweep' : 'guardPass';
+
+  const finishTech = pickProvenFirst(submissions, subCounts);
+
+  if (!entryTech || !advTech || !finishTech) return null;
+  return {
+    id: uid(), mode: 'chain', gi: null, source: 'chain',
+    steps: [
+      { category: entryCat,     technique: entryTech,  outcome: null },
+      { category: advCat,       technique: advTech,    outcome: null },
+      { category: 'submission', technique: finishTech, outcome: null },
+    ],
+    resolvedAt: null,
+  };
+}
+
+function TargetCard({ target, onSetOutcome, onDelete }) {
+  const allResolved = target.steps.every(s => s.outcome);
+  return (
+    <View style={{ borderWidth:1, borderColor:allResolved?C.border:`${C.gold}44`, backgroundColor:C.card, marginBottom:10 }}>
+      <View style={{ flexDirection:'row', alignItems:'center', padding:12, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:allResolved?C.faint:C.goldDim }}>
+        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:allResolved?C.muted:C.gold, flex:1 }}>
+          {target.mode === 'chain' ? '⛓ Chain Target' : '🎯 Target'}
+        </Txt>
+        {!allResolved && (
+          <TouchableOpacity onPress={()=>onDelete(target.id)} activeOpacity={0.75}>
+            <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
+          </TouchableOpacity>
+        )}
+      </View>
+      <View style={{ padding:12 }}>
+        {target.steps.map((step, i) => {
+          const cfg = TARGET_STEP_CFG[step.category];
+          return (
+            <View key={i} style={{ marginBottom: i<target.steps.length-1 ? 14 : 0 }}>
+              {target.mode==='chain' && i>0 && (
+                <View style={{ alignItems:'center', marginBottom:6 }}>
+                  <Txt style={{ color:C.border, fontSize:14 }}>↓</Txt>
+                </View>
+              )}
+              <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:8 }}>
+                <Txt style={{ fontSize:14 }}>{cfg.icon}</Txt>
+                <View style={{ flex:1 }}>
+                  <Cap style={{ fontSize:8, color:cfg.color }}>{cfg.label}</Cap>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text }}>{step.technique}</Txt>
+                </View>
+              </View>
+              <View style={{ flexDirection:'row', gap:6 }}>
+                {TARGET_OUTCOMES.map(o => {
+                  const active = step.outcome === o.key;
+                  return (
+                    <TouchableOpacity key={o.key} onPress={()=>onSetOutcome(target.id, i, o.key)} activeOpacity={0.75}
+                      style={{ flex:1, paddingVertical:8, borderWidth:1, alignItems:'center',
+                        borderColor: active ? o.color : C.border,
+                        backgroundColor: active ? o.bg : 'transparent' }}>
+                      <Txt style={{ fontSize:9, fontFamily:F.semi, color: active ? o.color : C.muted }}>{o.label}</Txt>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function TargetsScreen({ targets, setTargets, athlete, rolls, journal, submissions, sweeps, takedowns, guardPulls, confirm }) {
+  const [generating, setGenerating] = useState(false);
+
+  const active  = targets.filter(t => !t.resolvedAt);
+  const history = [...targets.filter(t => t.resolvedAt)].sort((a,b) => (b.resolvedAt||'').localeCompare(a.resolvedAt||''));
+
+  const allSteps      = targets.flatMap(t => t.steps);
+  const resolvedSteps = allSteps.filter(s => s.outcome);
+  const landedSteps   = resolvedSteps.filter(s => s.outcome === 'landed');
+  const landRate      = resolvedSteps.length ? Math.round((landedSteps.length/resolvedSteps.length)*100) : 0;
+  const chainsTotal     = history.filter(t => t.mode==='chain').length;
+  const chainsCompleted = history.filter(t => t.mode==='chain' && t.steps.every(s=>s.outcome==='landed')).length;
+
+  const newTarget = async (mode) => {
+    if (!athlete?.id) return;
+    setGenerating(true);
+    const draft = mode==='chain'
+      ? generateChainTarget({ rolls, takedowns, guardPulls, sweeps, submissions })
+      : generateSingleTarget({ journal, rolls, submissions, sweeps, takedowns, guardPulls });
+    if (!draft) {
+      setGenerating(false);
+      Alert.alert('Not enough data yet', 'Log a few techniques in your Journal or a few rolls first, then try again.');
+      return;
+    }
+    draft.athleteId = athlete.id;
+    try {
+      const saved = await db.createTarget(draft);
+      setTargets(ts => [saved, ...ts]);
+    } catch(e) { console.error('createTarget failed:', e.message); }
+    setGenerating(false);
+  };
+
+  const setOutcome = (targetId, stepIndex, outcome) => {
+    setTargets(ts => ts.map(t => {
+      if (t.id !== targetId) return t;
+      const steps = t.steps.map((s,i) => i===stepIndex ? { ...s, outcome } : s);
+      const allDone = steps.every(s => s.outcome);
+      const resolvedAt = allDone ? new Date().toISOString() : null;
+      db.updateTargetSteps(targetId, steps, resolvedAt).catch(console.error);
+      return { ...t, steps, resolvedAt };
+    }));
+  };
+
+  const deleteTarget = async (id) => {
+    const ok = await confirm('Remove this target?');
+    if (!ok) return;
+    await db.deleteTarget(id).catch(console.error);
+    setTargets(ts => ts.filter(t => t.id !== id));
+  };
+
+  return (
+    <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
+
+      <View style={{ flexDirection:'row', gap:8, marginBottom:16 }}>
+        {[
+          { label:'Active',      value: active.length, color:C.gold },
+          { label:'Landed Rate', value: resolvedSteps.length ? `${landRate}%` : '—', color:C.sage },
+          { label:'Chains Done', value: chainsTotal ? `${chainsCompleted}/${chainsTotal}` : '—', color:C.teal },
+          { label:'Total Set',   value: targets.length, color:C.muted },
+        ].map(({label,value,color}) => (
+          <View key={label} style={{ flex:1, borderWidth:1, borderColor:C.border, backgroundColor:C.card, padding:10, alignItems:'center' }}>
+            <Txt style={{ fontSize:16, fontFamily:F.display, color, lineHeight:20 }}>{value}</Txt>
+            <Cap style={{ fontSize:6, textAlign:'center', marginTop:3 }}>{label}</Cap>
+          </View>
+        ))}
+      </View>
+
+      <View style={{ flexDirection:'row', gap:8, marginBottom:20 }}>
+        <TouchableOpacity onPress={()=>newTarget('single')} disabled={generating} activeOpacity={0.8}
+          style={{ flex:1, backgroundColor:C.gold, padding:14, alignItems:'center', opacity:generating?0.6:1 }}>
+          <Txt style={{ fontSize:18, marginBottom:4 }}>🎯</Txt>
+          <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:C.charcoal }}>Single Target</Txt>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={()=>newTarget('chain')} disabled={generating} activeOpacity={0.8}
+          style={{ flex:1, backgroundColor:C.sage, padding:14, alignItems:'center', opacity:generating?0.6:1 }}>
+          <Txt style={{ fontSize:18, marginBottom:4 }}>⛓️</Txt>
+          <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:C.offWhite }}>Chain Target</Txt>
+        </TouchableOpacity>
+      </View>
+
+      {active.length > 0 && (
+        <View style={{ marginBottom:20 }}>
+          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
+            <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
+            <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Active</Txt>
+          </View>
+          {active.map(t => <TargetCard key={t.id} target={t} onSetOutcome={setOutcome} onDelete={deleteTarget}/>)}
+        </View>
+      )}
+
+      {active.length === 0 && (
+        <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, padding:32, alignItems:'center', marginBottom:20 }}>
+          <Txt style={{ fontSize:28, marginBottom:12 }}>🎯</Txt>
+          <Cap style={{ textAlign:'center', marginBottom:8 }}>No active targets</Cap>
+          <Txt style={{ fontSize:12, color:C.muted, textAlign:'center', lineHeight:18 }}>
+            Get a single technique to drill toward, or a chain to link your opener, advance, and finish into one game plan.
+          </Txt>
+        </View>
+      )}
+
+      {history.length > 0 && (
+        <View>
+          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
+            <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
+            <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>History</Txt>
+          </View>
+          {history.map(t => <TargetCard key={t.id} target={t} onSetOutcome={setOutcome} onDelete={deleteTarget}/>)}
+        </View>
+      )}
+
+    </ScrollView>
   );
 }
 
@@ -7163,6 +7480,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [competitions, setCompetitions] = useState([]);
   const [trainingDays, setTrainingDays] = useState([]);
   const [journal,         setJournal]         = useState([]);
+  const [targets,         setTargets]         = useState([]);
   const [classLogs,       setClassLogs]       = useState([]);
   const [skippedLogIds,   setSkippedLogIds]   = useState(new Set());
   const [showTutorial,    setShowTutorial]    = useState(false);
@@ -7202,15 +7520,17 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           if (techs.guard_pulls?.length) setGuardPulls(techs.guard_pulls);
           if (techs.takedowns?.length)   setTakedowns(techs.takedowns);
         }
-        const [dbRolls, dbDays, dbComps, dbJournal] = await Promise.all([
+        const [dbRolls, dbDays, dbComps, dbJournal, dbTargets] = await Promise.all([
           db.getRolls(ath.id),
           db.getTrainingDays(ath.id),
           db.getCompetitions(ath.id),
           db.getJournalEntries(ath.id),
+          db.getTargets(ath.id),
         ]);
         setRolls(dbRolls.map(fromDbRoll));
         setTrainingDays(dbDays);
         setCompetitions(dbComps);
+        setTargets(dbTargets);
         setJournal(dbJournal.map(e => ({
           id: e.id, athleteId: e.athlete_id,
           date: e.date, sessionType: e.session_type,
@@ -7609,6 +7929,14 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
             setSkippedLogIds(new Set(updated));
           }}
           allTechniques={[...submissions,...sweeps,...positions,...transitions,...guardPulls,...takedowns]}/>
+      )}
+      {tab==='Targets' && (
+        <TargetsScreen
+          targets={targets} setTargets={setTargets}
+          athlete={athlete} rolls={rolls} journal={journal}
+          submissions={submissions} sweeps={sweeps}
+          takedowns={takedowns} guardPulls={guardPulls}
+          confirm={confirm}/>
       )}
       {tab==='Charts' && (
         <ChartsScreen
