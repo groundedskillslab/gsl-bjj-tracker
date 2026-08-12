@@ -1187,7 +1187,36 @@ function OptionList({ items, onPick, pts, accent, showPts=true,
 // The FIRST decision after tapping You/Opponent: what kind of point was it. This
 // has to happen immediately, not later — the score bar's running total depends on
 // knowing category + points right away. Only the technique name gets deferred.
-function CategorySheet({ visible, isOpp, onClose, onPick }) {
+// ─── Pending Strip ───────────────────────────────────────────────────────────────
+// The sequence of everything still waiting on this same kind of decision (category
+// or detail, whichever sheet is showing it). Tap any chip to retarget the sheet at
+// that marker instead — no need to close, find it in Event Log, and reopen.
+function PendingStrip({ items, activeId, tsLabel, onSelect }) {
+  if (items.length < 2) return null;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }}>
+      <View style={{ flexDirection:'row', gap:6 }}>
+        {items.map(ev => {
+          const active = ev.id===activeId;
+          const dotColor = ev.side==='me' ? C.gold : C.stone;
+          return (
+            <TouchableOpacity key={ev.id} onPress={()=>onSelect(ev)} activeOpacity={0.75}
+              style={{ borderWidth:1, borderColor:active?dotColor:C.border, backgroundColor:active?`${dotColor}1A`:'transparent',
+                paddingHorizontal:10, paddingVertical:6, alignItems:'center' }}>
+              <View style={{ flexDirection:'row', alignItems:'center', gap:5 }}>
+                <View style={{ width:6, height:6, borderRadius:3, backgroundColor:dotColor }}/>
+                <Txt style={{ fontSize:10, fontFamily:active?F.semi:F.body, color:active?dotColor:C.textDim }}>{tsLabel(ev.ts)}</Txt>
+              </View>
+              {ev.label ? <Cap style={{ fontSize:7, marginTop:2, color:C.muted }}>{ev.label}</Cap> : null}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+
+function CategorySheet({ visible, activeId, isOpp, timeLabel, queueLabel, pendingItems=[], tsLabel, onSelectPending, onClose, onPick }) {
   const ac = isOpp ? C.stone : C.gold;
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -1197,7 +1226,7 @@ function CategorySheet({ visible, isOpp, onClose, onPick }) {
           paddingTop:20, paddingHorizontal:16, paddingBottom:Platform.OS==='ios'?36:16, maxHeight:'90%' }}>
           <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
             <View>
-              <Cap style={{ marginBottom:2 }}>{isOpp?'Opponent':'You'}</Cap>
+              <Cap style={{ marginBottom:2 }}>{isOpp?'Opponent':'You'}{timeLabel?` · ${timeLabel}`:''}{queueLabel?` · ${queueLabel}`:''}</Cap>
               <Txt style={{ fontSize:14, fontFamily:F.semi, color:ac }}>What kind of point?</Txt>
             </View>
             <TouchableOpacity onPress={onClose}
@@ -1206,6 +1235,7 @@ function CategorySheet({ visible, isOpp, onClose, onPick }) {
               <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
             </TouchableOpacity>
           </View>
+          <PendingStrip items={pendingItems} activeId={activeId} tsLabel={tsLabel} onSelect={onSelectPending}/>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
             {Object.entries(SCORE_EVENTS).map(([key,ev]) => (
               <TouchableOpacity key={key} onPress={()=>onPick(key)} activeOpacity={0.75}
@@ -1233,7 +1263,7 @@ const FIRST_DETAIL_STEP = {
   sweep:'sweep_startPos', takedown:'td_technique', guardPass:'gp_guardType',
   guardPull:'pull_endPos', advantage:'adv_type',
 };
-function QuickScoreSheet({ visible, isOpp, scoreKey, onClose, onRecord, allTechniques=[] }) {
+function QuickScoreSheet({ visible, activeId, isOpp, scoreKey, timeLabel, queueLabel, pendingItems=[], tsLabel, onSelectPending, onClose, onRecord, allTechniques=[] }) {
   const firstStep = FIRST_DETAIL_STEP[scoreKey] || 'sweep_startPos';
   const [step,       setStep]       = useState(firstStep);
   const [sel1,       setSel1]       = useState(null);
@@ -1244,8 +1274,11 @@ function QuickScoreSheet({ visible, isOpp, scoreKey, onClose, onRecord, allTechn
   const ac = isOpp ? C.stone : C.gold;
 
   useEffect(() => {
+    // Keyed on activeId too, not just scoreKey — switching between two pending
+    // items that happen to share a category (two Sweeps, say) still needs to
+    // reset the wizard back to step one for whichever marker is now targeted.
     if (visible) { setStep(FIRST_DETAIL_STEP[scoreKey] || 'sweep_startPos'); setSel1(null); setCustomVal(''); setShowCustom(false); }
-  }, [visible, scoreKey]);
+  }, [visible, scoreKey, activeId]);
 
   const reset = () => { setStep(firstStep); setSel1(null); setCustomVal(''); setShowCustom(false); };
   const close = () => { onClose(); reset(); };
@@ -1310,7 +1343,7 @@ function QuickScoreSheet({ visible, isOpp, scoreKey, onClose, onRecord, allTechn
                   </TouchableOpacity>
                 )}
                 <View>
-                  <Cap style={{ marginBottom:2 }}>{isOpp?'Opponent':'You'}</Cap>
+                  <Cap style={{ marginBottom:2 }}>{isOpp?'Opponent':'You'}{timeLabel?` · ${timeLabel}`:''}{queueLabel?` · ${queueLabel}`:''}</Cap>
                   <Txt style={{ fontSize:14, fontFamily:F.semi, color:ac }}>{stepHeaders[step]||'Add technique'}</Txt>
                 </View>
               </View>
@@ -1320,6 +1353,8 @@ function QuickScoreSheet({ visible, isOpp, scoreKey, onClose, onRecord, allTechn
                 <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
               </TouchableOpacity>
             </View>
+
+            <PendingStrip items={pendingItems} activeId={activeId} tsLabel={tsLabel} onSelect={onSelectPending}/>
 
             {/* All OptionList steps share these keyboard/custom props */}
             {(step==='sweep_startPos'||step==='sweep_tech'||step==='td_technique'||step==='td_endPos'||step==='gp_guardType'||step==='gp_technique'||step==='pull_endPos'||step==='adv_type') && (() => {
@@ -1876,6 +1911,25 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   // Routes a pending marker to whichever sheet it actually needs next.
   const openPending = ev => { if (ev.scoreKey==null) setCategoryId(ev.id); else setClassifyingId(ev.id); };
 
+  // Shared context for "which marker am I looking at" — shown in both sheets'
+  // headers, and used to find what's next when auto-advancing through a batch.
+  const pendingSorted   = (roll.eventLog||[]).filter(e=>e.classified===false).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const pendingCategory = pendingSorted.filter(e=>e.scoreKey==null);
+  const pendingDetail   = pendingSorted.filter(e=>e.scoreKey!=null);
+  const tsLabel = ts => roll.videoMode==='review' ? fmtClock(ts) : fmtTime(ts);
+  const queueLabelFor = id => {
+    const idx = pendingSorted.findIndex(e=>e.id===id);
+    return idx>=0 && pendingSorted.length>1 ? `${idx+1} of ${pendingSorted.length}` : '';
+  };
+
+  // Only the detail (technique) step auto-advances. Category picks are almost
+  // always triggered by a live tap mid-roll — chaining straight into another
+  // marker's sheet there would interrupt the roll, not help it.
+  const advanceAfterDetail = doneId => {
+    const remaining = pendingSorted.filter(e=>e.id!==doneId);
+    if (remaining.length) openPending(remaining[0]);
+  };
+
   // Still used internally where an immediate, single-step score makes sense.
   const quickScore = (isOpp, scoreKey, context={}) => {
     const fields = buildScoreEventFields(scoreKey, context); if(!fields) return;
@@ -2065,15 +2119,27 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
       )}
 
       <CategorySheet visible={categoryId!==null}
+        activeId={categoryId}
         isOpp={(roll.eventLog||[]).find(e=>e.id===categoryId)?.side==='opp'}
+        timeLabel={(() => { const m=(roll.eventLog||[]).find(e=>e.id===categoryId); return m?tsLabel(m.ts):''; })()}
+        queueLabel={queueLabelFor(categoryId)}
+        pendingItems={pendingCategory}
+        tsLabel={tsLabel}
+        onSelectPending={ev=>setCategoryId(ev.id)}
         onClose={()=>setCategoryId(null)}
         onPick={key=>{ classifyCategory(categoryId,key); setCategoryId(null); }}/>
       <QuickScoreSheet visible={classifyingId!==null}
+        activeId={classifyingId}
         isOpp={(roll.eventLog||[]).find(e=>e.id===classifyingId)?.side==='opp'}
         scoreKey={(roll.eventLog||[]).find(e=>e.id===classifyingId)?.scoreKey}
+        timeLabel={(() => { const m=(roll.eventLog||[]).find(e=>e.id===classifyingId); return m?tsLabel(m.ts):''; })()}
+        queueLabel={queueLabelFor(classifyingId)}
+        pendingItems={pendingDetail}
+        tsLabel={tsLabel}
+        onSelectPending={ev=>setClassifyingId(ev.id)}
         onClose={()=>setClassifyingId(null)}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}
-        onRecord={(context)=>{ classifyDetail(classifyingId,context||{}); setClassifyingId(null); }}/>
+        onRecord={(context)=>{ const doneId=classifyingId; classifyDetail(doneId,context||{}); setClassifyingId(null); advanceAfterDetail(doneId); }}/>
       <ResetSheet visible={showReset} onClose={()=>setShowReset(false)}
         onConfirm={confirmReset} submissions={submissions}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}/>
