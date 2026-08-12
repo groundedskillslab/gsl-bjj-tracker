@@ -8,11 +8,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
-  StyleSheet, Modal, Alert, Platform, Dimensions,
+  StyleSheet, Modal, Alert, Platform, Dimensions, Linking,
   KeyboardAvoidingView, FlatList, Switch, StatusBar, Image, ActivityIndicator,
 } from 'react-native';
 import Svg, { Rect, Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import * as Font from 'expo-font';
+import { Video, ResizeMode } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from './supabase';
 
 // URL polyfill — native only (browser already has the URL API built in)
@@ -189,6 +191,7 @@ const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
   return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
 });
 const fmtSecs     = s => { if(!s) return '0s'; const m=Math.floor(s/60),sc=s%60; return m>0?`${m}m${sc>0?` ${sc}s`:''}` :`${sc}s`; };
+const fmtClock     = s => { s=Math.max(0,Math.round(s||0)); const m=Math.floor(s/60),sc=s%60; return `${m}:${String(sc).padStart(2,'0')}`; };
 const fmtDateTime = ts => new Date(ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 const fmtTime     = ts => new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 const fmtCompDate = d  => { if(!d)return''; const[y,m,day]=d.split('-'); return new Date(+y,+m-1,+day).toLocaleDateString([],{month:'long',day:'numeric',year:'numeric'}); };
@@ -199,7 +202,35 @@ const emptyRoll = (partner='',isComp=false) => ({
   subCounts:{}, sweepCounts:{}, posCounts:{}, transCounts:{}, guardPassCounts:{},
   opp_subCounts:{}, opp_sweepCounts:{}, opp_posCounts:{}, opp_transCounts:{}, opp_guardPassCounts:{},
   eventLog:[], paused:false, pausedAt:null, totalPausedMs:0,
+  // videoUrl: local file URI, YouTube link, or any pasted link — whatever the athlete points at.
+  // videoMode: 'live'   → events are timestamped in wall-clock ms, converted via videoSyncOffset.
+  //            'review' → events are timestamped directly in video-seconds, no conversion needed.
+  //            null     → no video attached.
+  videoUrl:null, videoMode:null, videoSyncOffset:null,
 });
+
+// ─── Video seek helper ──────────────────────────────────────────────────────────
+// One shared function so every screen that wants to jump a video to an event's
+// moment does the conversion the same way, regardless of which pathway logged it.
+const getVideoSeekSeconds = (roll, event) => {
+  if (!roll?.videoUrl || event?.ts==null) return null;
+  if (roll.videoMode === 'review') return typeof event.ts === 'number' ? event.ts : null;
+  if (roll.videoMode === 'live') {
+    if (roll.videoSyncOffset==null || !roll.startedAt) return null; // filmed but not yet synced
+    return Math.max(0, (event.ts - roll.startedAt)/1000 + roll.videoSyncOffset);
+  }
+  return null;
+};
+
+// Is this a source expo-av's <Video> can actually decode and seek natively?
+// Local picker files and direct file links (mp4/mov/m3u8/webm) — yes.
+// YouTube and share-page links (Drive/Dropbox/iCloud previews) — no, those need
+// the embed-or-external fallback instead.
+const isDirectVideoSource = url => {
+  if (!url) return false;
+  if (url.startsWith('file://') || url.startsWith('ph://') || url.startsWith('content://')) return true;
+  return /\.(mp4|mov|m3u8|webm)(\?.*)?$/i.test(url.trim());
+};
 
 const emptyProfileData = () => ({
   submissions: DEF_SUBS, sweeps: DEF_SWEEPS, positions: DEF_POS,
@@ -443,12 +474,13 @@ function toDbRoll(r) {
     duration: r.duration, is_active: r.isActive || false,
     event_log: r.eventLog || [],
     sub_counts: r.subCounts || {}, sweep_counts: r.sweepCounts || {},
-    pos_durations: r.posDurations || {}, trans_counts: r.transCounts || {},
+    pos_durations: r.posDurations || {}, pos_counts: r.posCounts || {}, trans_counts: r.transCounts || {},
     guard_pass_counts: r.guardPassCounts || {},
     opp_sub_counts: r.opp_subCounts || {}, opp_sweep_counts: r.opp_sweepCounts || {},
-    opp_pos_durations: r.opp_posDurations || {}, opp_trans_counts: r.opp_transCounts || {},
+    opp_pos_durations: r.opp_posDurations || {}, opp_pos_counts: r.opp_posCounts || {}, opp_trans_counts: r.opp_transCounts || {},
     opp_guard_pass_counts: r.opp_guardPassCounts || {},
     paused: r.paused || false, paused_at: r.pausedAt, total_paused_ms: r.totalPausedMs || 0,
+    video_url: r.videoUrl || null, video_mode: r.videoMode || null, video_sync_offset: r.videoSyncOffset ?? null,
   };
 }
 function fromDbRoll(r) {
@@ -460,12 +492,13 @@ function fromDbRoll(r) {
     duration: r.duration, isActive: r.is_active,
     eventLog: r.event_log || [],
     subCounts: r.sub_counts || {}, sweepCounts: r.sweep_counts || {},
-    posDurations: r.pos_durations || {}, transCounts: r.trans_counts || {},
+    posDurations: r.pos_durations || {}, posCounts: r.pos_counts || {}, transCounts: r.trans_counts || {},
     guardPassCounts: r.guard_pass_counts || {},
     opp_subCounts: r.opp_sub_counts || {}, opp_sweepCounts: r.opp_sweep_counts || {},
-    opp_posDurations: r.opp_pos_durations || {}, opp_transCounts: r.opp_trans_counts || {},
+    opp_posDurations: r.opp_pos_durations || {}, opp_posCounts: r.opp_pos_counts || {}, opp_transCounts: r.opp_trans_counts || {},
     opp_guardPassCounts: r.opp_guard_pass_counts || {},
     paused: r.paused, pausedAt: r.paused_at, totalPausedMs: r.total_paused_ms || 0,
+    videoUrl: r.video_url || null, videoMode: r.video_mode || null, videoSyncOffset: r.video_sync_offset ?? null,
   };
 }
 function toDbRound(r, competitionId, athleteId) {
@@ -861,93 +894,158 @@ function ScoreComparison({ roll, compact=false }) {
 }
 
 // ─── Event Log ──────────────────────────────────────────────────────────────────
-function EventLogPanel({ log=[], onDeleteEvent }) {
+// ─── Exchange grouping ───────────────────────────────────────────────────────────
+// Splits a roll's eventLog into exchanges wherever a reset closed one, mirroring
+// how the reviewed-from-video and tracked-live pathways both write resets the
+// same way. Competition rounds and pre-Reset rolls have no reset events at all,
+// in which case EventLogPanel below just falls back to a flat list.
+function getExchanges(roll) {
+  const log = (roll?.eventLog||[]).filter(e=>e.type!=='end');
+  if (!log.length) return [];
+  const sorted = [...log].sort((a,b)=>(a.ts||0)-(b.ts||0));
+  let start = roll?.videoMode==='review' ? 0 : (roll?.startedAt ?? sorted[0].ts);
+  const ex = []; let current = [];
+  sorted.forEach(e => {
+    if (e.type==='reset') { ex.push({ start, end:e.ts, items:current, open:false, endEvent:e }); current=[]; start=e.ts; }
+    else current.push(e);
+  });
+  ex.push({ start, end:sorted[sorted.length-1].ts, items:current, open:true, endEvent:null });
+  return ex;
+}
+function exchangeOutcome(ex) {
+  if (ex.open) return { text:'Ongoing', color:C.muted };
+  const r = ex.endEvent;
+  if (r?.cause==='submission') return { text:`Sub: ${r.technique} (${r.side==='me'?'you':'opp'})`, color:r.side==='me'?C.gold:C.opp };
+  return { text:'No finish', color:C.muted };
+}
+
+// ─── Event Log row pieces ────────────────────────────────────────────────────────
+function EndEventCard({ ev, fmtTs }) {
+  const isSub  = ev.item === 'submission';
+  const accent = isSub ? C.red : C.stone;
+  return (
+    <View style={{ marginVertical:8, borderWidth:1, borderColor:`${accent}55`, backgroundColor:`${accent}0D` }}>
+      <View style={{ flexDirection:'row', alignItems:'center', padding:12, gap:12 }}>
+        <View style={{ width:32, height:32, backgroundColor:accent, alignItems:'center', justifyContent:'center' }}>
+          <Txt style={{ fontSize:16 }}>{isSub ? '🔒' : '⏱'}</Txt>
+        </View>
+        <View style={{ flex:1 }}>
+          <Cap style={{ color:accent, marginBottom:3 }}>{isSub ? 'Ended by submission' : 'Ended — time expired'}</Cap>
+          {isSub && ev.submissionName ? <Txt style={{ fontSize:14, fontFamily:F.bold, color:C.text }}>{ev.submissionName}</Txt> : null}
+          {isSub && ev.submissionWinner ? (
+            <View style={{ marginTop:5, flexDirection:'row' }}>
+              <View style={{ borderWidth:1, borderColor:`${ev.submissionWinner==='me'?C.sage:C.red}55`, paddingHorizontal:7, paddingVertical:3 }}>
+                <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:ev.submissionWinner==='me'?C.sage:C.red }}>
+                  {ev.submissionWinner==='me' ? '✓ You tapped them out' : '✗ You tapped out'}
+                </Txt>
+              </View>
+            </View>
+          ) : null}
+          {!isSub && ev.duration ? <Txt style={{ fontSize:12, color:C.textDim, marginTop:3 }}>Duration: {ev.duration}</Txt> : null}
+          <Txt style={{ fontSize:9, color:C.muted, marginTop:5 }}>{fmtTs(ev)}</Txt>
+        </View>
+      </View>
+    </View>
+  );
+}
+const EVENT_TC = { submission:C.red, sweep:C.gold, position:C.sage, transition:C.blue, guardPass:C.teal, takedown:C.blue, reset:C.muted, end:C.stone };
+function EventRow({ ev, fmtTs, canSeek, onSeek, onDelete }) {
+  const sc = ev.side==='me' ? C.gold : C.stone;
+  const tc = EVENT_TC[ev.type] || C.muted;
+  const contextParts = [];
+  if (ev.fromPosition) contextParts.push(`from ${ev.fromPosition}`);
+  if (ev.toPosition)   contextParts.push(`→ ${ev.toPosition}`);
+  if (ev.guardPassed)  contextParts.push(`passed ${ev.guardPassed}`);
+  if (ev.advType)      contextParts.push(ev.advType);
+  const contextStr = contextParts.join(' · ');
+
+  return (
+    <TouchableOpacity activeOpacity={canSeek?0.6:1} onPress={()=>{ if(canSeek) onSeek(); }}
+      style={{ flexDirection:'row', alignItems:'flex-start', paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.border }}>
+      <View style={{ width:4, height:4, backgroundColor:sc, marginTop:7, marginRight:12 }}/>
+      <View style={{ flex:1 }}>
+        <View style={{ flexDirection:'row', alignItems:'center', flexWrap:'wrap' }}>
+          <Txt style={{ fontSize:13, fontFamily:F.medium }}>{ev.label||ev.item}</Txt>
+          {ev.scored && ev.pts > 0 && (
+            <View style={{ marginLeft:8, borderWidth:1, borderColor:`${sc}44`, paddingHorizontal:5, paddingVertical:1 }}>
+              <Txt style={{ fontSize:8, color:sc, fontFamily:F.semi, letterSpacing:1.5 }}>+{ev.pts} PTS</Txt>
+            </View>
+          )}
+          {ev.scored && ev.pts === 0 && (
+            <View style={{ marginLeft:8, borderWidth:1, borderColor:`${C.sand}44`, paddingHorizontal:5, paddingVertical:1 }}>
+              <Txt style={{ fontSize:8, color:C.sand, fontFamily:F.semi, letterSpacing:1.5 }}>ADV</Txt>
+            </View>
+          )}
+        </View>
+        {contextStr ? <Txt style={{ fontSize:10, color:C.teal, marginTop:3, fontFamily:F.medium }}>{contextStr}</Txt> : null}
+        <View style={{ flexDirection:'row', alignItems:'center', marginTop:4 }}>
+          <View style={{ borderWidth:1, borderColor:`${tc}33`, paddingHorizontal:4, paddingVertical:1, marginRight:8 }}>
+            <Txt style={{ fontSize:8, color:tc, letterSpacing:1.5, textTransform:'uppercase', fontFamily:F.semi }}>{ev.type}</Txt>
+          </View>
+          <Txt style={{ fontSize:10, color:C.muted }}>{ev.side==='me'?'You':ev.side==='opp'?'Opp':''} · {fmtTs(ev)}</Txt>
+          {canSeek && <Txt style={{ fontSize:10, color:C.gold, marginLeft:6 }}>▶ jump to video</Txt>}
+        </View>
+      </View>
+      {onDelete && (
+        <TouchableOpacity onPress={onDelete} style={{ padding:8 }} activeOpacity={0.7}>
+          <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+function EventLogPanel({ log=[], onDeleteEvent, roll=null, onSeek=null }) {
   if (!log.length) return <Cap style={{ textAlign:'center', marginVertical:32 }}>No events recorded</Cap>;
-  const TC = { submission:C.red, sweep:C.gold, position:C.sage, transition:C.blue, guardPass:C.teal, takedown:C.blue, end:C.stone };
+  // ev.ts means different things depending on how the roll was logged — see
+  // getVideoSeekSeconds. Format and seek accordingly rather than assuming wall-clock.
+  const fmtRawTs = ts => roll?.videoMode==='review' ? fmtClock(ts) : fmtTime(ts);
+  const fmtTs    = ev => fmtRawTs(ev.ts);
+  const seekFor  = ev => onSeek ? ()=>{ const sec=getVideoSeekSeconds(roll,ev); if(sec!=null) onSeek(sec); } : null;
+  const canSeek  = ev => !!onSeek && getVideoSeekSeconds(roll,ev)!=null;
+  const endEv    = log.find(e=>e.type==='end');
+  const hasResets= log.some(e=>e.type==='reset');
+
+  // Rolls with at least one Reset (open-mat, tracked either pathway) group into
+  // exchanges. Competition rounds and older rolls with no resets get a flat list.
+  if (hasResets) {
+    const exchanges = getExchanges(roll);
+    return (
+      <View>
+        {endEv && <EndEventCard ev={endEv} fmtTs={fmtTs}/>}
+        {[...exchanges].reverse().map((ex,idx) => {
+          const n = exchanges.length - idx;
+          const outcome = exchangeOutcome(ex);
+          const startSeekable = !!onSeek && getVideoSeekSeconds(roll,{ts:ex.start})!=null;
+          return (
+            <View key={idx} style={{ marginBottom:16 }}>
+              <TouchableOpacity activeOpacity={startSeekable?0.6:1}
+                onPress={()=>{ if(startSeekable) onSeek(getVideoSeekSeconds(roll,{ts:ex.start})); }}
+                style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:C.card, padding:10, marginBottom:2 }}>
+                <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.textDim }}>Exchange {n} · {fmtRawTs(ex.start)}–{fmtRawTs(ex.end)}</Txt>
+                <View style={{ borderWidth:1, borderColor:`${outcome.color}55`, paddingHorizontal:6, paddingVertical:2 }}>
+                  <Txt style={{ fontSize:9, fontFamily:F.semi, color:outcome.color }}>{outcome.text}</Txt>
+                </View>
+              </TouchableOpacity>
+              {!ex.items.length && <Cap style={{ padding:10 }}>No taps in this exchange</Cap>}
+              {ex.items.map((ev,i) => (
+                <EventRow key={ev.id||i} ev={ev} fmtTs={fmtTs} canSeek={canSeek(ev)} onSeek={seekFor(ev)}
+                  onDelete={onDeleteEvent?()=>onDeleteEvent(ev.id):null}/>
+              ))}
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
 
   return (
     <View>
-      {[...log].reverse().map((ev,i) => {
-        const isEnd = ev.type === 'end';
-
-        // ── Final event — special card ──────────────────────────────────────
-        if (isEnd) {
-          const isSub  = ev.item === 'submission';
-          const accent = isSub ? C.red : C.stone;
-          return (
-            <View key={ev.id||i} style={{ marginVertical:8, borderWidth:1, borderColor:`${accent}55`, backgroundColor:`${accent}0D` }}>
-              <View style={{ flexDirection:'row', alignItems:'center', padding:12, gap:12 }}>
-                <View style={{ width:32, height:32, backgroundColor:accent, alignItems:'center', justifyContent:'center' }}>
-                  <Txt style={{ fontSize:16 }}>{isSub ? '🔒' : '⏱'}</Txt>
-                </View>
-                <View style={{ flex:1 }}>
-                  <Cap style={{ color:accent, marginBottom:3 }}>{isSub ? 'Ended by submission' : 'Ended — time expired'}</Cap>
-                  {isSub && ev.submissionName ? (
-                    <Txt style={{ fontSize:14, fontFamily:F.bold, color:C.text }}>{ev.submissionName}</Txt>
-                  ) : null}
-                  {isSub && ev.submissionWinner ? (
-                    <View style={{ marginTop:5, flexDirection:'row' }}>
-                      <View style={{ borderWidth:1, borderColor:`${ev.submissionWinner==='me'?C.sage:C.red}55`, paddingHorizontal:7, paddingVertical:3 }}>
-                        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:ev.submissionWinner==='me'?C.sage:C.red }}>
-                          {ev.submissionWinner==='me' ? '✓ You tapped them out' : '✗ You tapped out'}
-                        </Txt>
-                      </View>
-                    </View>
-                  ) : null}
-                  {!isSub && ev.duration ? (
-                    <Txt style={{ fontSize:12, color:C.textDim, marginTop:3 }}>Duration: {ev.duration}</Txt>
-                  ) : null}
-                  <Txt style={{ fontSize:9, color:C.muted, marginTop:5 }}>{fmtTime(ev.ts)}</Txt>
-                </View>
-              </View>
-            </View>
-          );
-        }
-
-        // ── Regular event ──────────────────────────────────────────────────
-        const sc = ev.side==='me' ? C.gold : C.stone;
-        const tc = TC[ev.type] || C.muted;
-        // Build contextual sub-line
-        const contextParts = [];
-        if (ev.fromPosition) contextParts.push(`from ${ev.fromPosition}`);
-        if (ev.toPosition)   contextParts.push(`→ ${ev.toPosition}`);
-        if (ev.guardPassed)  contextParts.push(`passed ${ev.guardPassed}`);
-        if (ev.advType)      contextParts.push(ev.advType);
-        const contextStr = contextParts.join(' · ');
-
-        return (
-          <View key={ev.id||i} style={{ flexDirection:'row', alignItems:'flex-start', paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.border }}>
-            <View style={{ width:4, height:4, backgroundColor:sc, marginTop:7, marginRight:12 }}/>
-            <View style={{ flex:1 }}>
-              <View style={{ flexDirection:'row', alignItems:'center', flexWrap:'wrap' }}>
-                <Txt style={{ fontSize:13, fontFamily:F.medium }}>{ev.label||ev.item}</Txt>
-                {ev.scored && ev.pts > 0 && (
-                  <View style={{ marginLeft:8, borderWidth:1, borderColor:`${sc}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                    <Txt style={{ fontSize:8, color:sc, fontFamily:F.semi, letterSpacing:1.5 }}>+{ev.pts} PTS</Txt>
-                  </View>
-                )}
-                {ev.scored && ev.pts === 0 && (
-                  <View style={{ marginLeft:8, borderWidth:1, borderColor:`${C.sand}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                    <Txt style={{ fontSize:8, color:C.sand, fontFamily:F.semi, letterSpacing:1.5 }}>ADV</Txt>
-                  </View>
-                )}
-              </View>
-              {contextStr ? <Txt style={{ fontSize:10, color:C.teal, marginTop:3, fontFamily:F.medium }}>{contextStr}</Txt> : null}
-              <View style={{ flexDirection:'row', marginTop:4 }}>
-                <View style={{ borderWidth:1, borderColor:`${tc}33`, paddingHorizontal:4, paddingVertical:1, marginRight:8 }}>
-                  <Txt style={{ fontSize:8, color:tc, letterSpacing:1.5, textTransform:'uppercase', fontFamily:F.semi }}>{ev.type}</Txt>
-                </View>
-                <Txt style={{ fontSize:10, color:C.muted }}>{ev.side==='me'?'You':'Opp'} · {fmtTime(ev.ts)}</Txt>
-              </View>
-            </View>
-            {onDeleteEvent && (
-              <TouchableOpacity onPress={()=>onDeleteEvent(ev.id)} style={{ padding:8 }} activeOpacity={0.7}>
-                <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
-              </TouchableOpacity>
-            )}
-          </View>
-        );
-      })}
+      {[...log].reverse().map((ev,i) => ev.type==='end'
+        ? <EndEventCard key={ev.id||i} ev={ev} fmtTs={fmtTs}/>
+        : <EventRow key={ev.id||i} ev={ev} fmtTs={fmtTs} canSeek={canSeek(ev)} onSeek={seekFor(ev)}
+            onDelete={onDeleteEvent?()=>onDeleteEvent(ev.id):null}/>
+      )}
     </View>
   );
 }
@@ -1414,6 +1512,133 @@ function PositionCountPanel({ positions, posCounts, onAdd, onRemove, onAddPos, d
 }
 
 // ─── Roll Tracking Panel ─────────────────────────────────────────────────────────
+// ─── Inline Video Player ────────────────────────────────────────────────────────
+// Plays a local camera-roll file or a direct video URL natively, with an
+// imperative handle so callers can read the exact playhead (for timestamping
+// taps in review mode) or seek to a stored timestamp (for "jump to this moment").
+// Not for YouTube or share-page links — those aren't raw decodable streams; see
+// VideoAttachRow for how those fall back to open-externally instead.
+const InlineVideoPlayer = React.forwardRef(function InlineVideoPlayer({ uri }, ref) {
+  const videoRef = useRef(null);
+  const posRef    = useRef(0);
+  const [status, setStatus] = useState({});
+
+  React.useImperativeHandle(ref, () => ({
+    getPositionSeconds: () => posRef.current,
+    seekTo: async seconds => { try { await videoRef.current?.setPositionAsync(Math.max(0,Math.round(seconds*1000))); } catch(e) {} },
+  }));
+
+  const onUpdate = st => {
+    setStatus(st);
+    if (st.isLoaded && typeof st.positionMillis==='number') posRef.current = st.positionMillis/1000;
+  };
+
+  const durSec = status.isLoaded && status.durationMillis ? status.durationMillis/1000 : 0;
+  const posSec = status.isLoaded && status.positionMillis ? status.positionMillis/1000 : 0;
+  const pct    = durSec>0 ? Math.min(100,(posSec/durSec)*100) : 0;
+
+  return (
+    <View style={{ backgroundColor:'#000', borderRadius:10, overflow:'hidden', marginBottom:14 }}>
+      <Video ref={videoRef} source={{ uri }} style={{ width:'100%', aspectRatio:16/9 }}
+        resizeMode={ResizeMode.CONTAIN} useNativeControls={false}
+        onPlaybackStatusUpdate={onUpdate} progressUpdateIntervalMillis={200}/>
+      <View style={{ padding:10 }}>
+        <View style={{ height:3, backgroundColor:'#ffffff33', borderRadius:2, marginBottom:8 }}>
+          <View style={{ height:'100%', width:`${pct}%`, backgroundColor:C.gold, borderRadius:2 }}/>
+        </View>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
+          <TouchableOpacity onPress={()=> status.isPlaying ? videoRef.current?.pauseAsync() : videoRef.current?.playAsync()} activeOpacity={0.75}
+            style={{ width:34, height:34, borderRadius:17, backgroundColor:C.goldDim, alignItems:'center', justifyContent:'center' }}>
+            <Txt style={{ color:C.gold, fontSize:13 }}>{status.isPlaying?'❚❚':'▶'}</Txt>
+          </TouchableOpacity>
+          <Txt style={{ fontSize:11, color:'#EDE9DFcc' }}>{fmtClock(posSec)} / {fmtClock(durSec)}</Txt>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+// ─── Manual Time Entry (fallback player) ────────────────────────────────────────
+// For links that can't be played inline — Drive/Dropbox/iCloud share pages, or
+// YouTube on native (only embeds on web today). The athlete watches externally
+// and keeps this field roughly in sync by eye; getTs reads whatever's typed here
+// instead of an automatic playhead. Precision suffers, but the pathway still works.
+function ManualTimeEntry({ url, seconds, onChangeSeconds }) {
+  const [text, setText] = useState(fmtClock(seconds));
+  const openUrl = () => { if (typeof window!=='undefined') window.open(url,'_blank'); else Linking.openURL(url).catch(()=>{}); };
+  const commit = v => {
+    setText(v);
+    const m = v.trim().match(/^(\d+):(\d{1,2})$/);
+    if (m) onChangeSeconds(parseInt(m[1],10)*60+parseInt(m[2],10));
+    else if (/^\d+$/.test(v.trim())) onChangeSeconds(parseInt(v.trim(),10));
+  };
+  return (
+    <View style={{ borderWidth:1, borderColor:C.border, padding:12, marginBottom:14 }}>
+      <Cap style={{ marginBottom:8 }}>This link can't play inline — watch it externally, type the time you see</Cap>
+      <View style={{ flexDirection:'row', gap:8 }}>
+        <TouchableOpacity onPress={openUrl} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:12 }]}>
+          <Txt style={[s.btnText,{ color:C.muted }]}>↗ Open video</Txt>
+        </TouchableOpacity>
+        <TextInput value={text} onChangeText={commit} placeholder="m:ss" placeholderTextColor={C.muted}
+          keyboardType={Platform.OS==='web'?'default':'numbers-and-punctuation'} style={[s.input,{ width:80, textAlign:'center' }]}/>
+      </View>
+    </View>
+  );
+}
+
+// ─── Video Attach Row ───────────────────────────────────────────────────────────
+// Points a roll at a video however the athlete already has it — camera roll or a
+// pasted link to wherever they store their own footage. The app never uploads or
+// hosts the bytes, only ever a URL/local-file reference.
+function VideoAttachRow({ videoUrl, onAttach, onClear, disabled }) {
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteVal,  setPasteVal]  = useState('');
+
+  const pickFromLibrary = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo library access to attach a video.'); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos, quality:1 });
+    if (!res.canceled && res.assets?.[0]?.uri) onAttach(res.assets[0].uri);
+  };
+
+  if (videoUrl) {
+    const isLocal = videoUrl.startsWith('file://')||videoUrl.startsWith('ph://')||videoUrl.startsWith('content://');
+    return (
+      <View style={{ flexDirection:'row', alignItems:'center', borderWidth:1, borderColor:C.border, padding:10, marginBottom:14 }}>
+        <Txt style={{ fontSize:15, marginRight:10 }}>🎥</Txt>
+        <Txt style={{ flex:1, fontSize:11, color:C.textDim }} numberOfLines={1}>{isLocal?'Video from camera roll':videoUrl}</Txt>
+        <TouchableOpacity onPress={onClear} disabled={disabled} activeOpacity={0.7} style={{ padding:6 }}>
+          <Cap style={{ color:C.muted }}>Remove</Cap>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginBottom:14 }}>
+      {!showPaste ? (
+        <View style={{ flexDirection:'row', gap:8 }}>
+          <TouchableOpacity onPress={pickFromLibrary} disabled={disabled} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:12 }]}>
+            <Txt style={[s.btnText,{ color:C.muted }]}>📷 Camera roll</Txt>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={()=>setShowPaste(true)} disabled={disabled} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:12 }]}>
+            <Txt style={[s.btnText,{ color:C.muted }]}>🔗 Paste link</Txt>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={{ flexDirection:'row', gap:8 }}>
+          <TextInput value={pasteVal} onChangeText={setPasteVal} placeholder="Paste video link…" placeholderTextColor={C.muted}
+            autoCapitalize="none" autoCorrect={false} style={[s.input,{ flex:1 }]}/>
+          <TouchableOpacity onPress={()=>{ if(pasteVal.trim()){ onAttach(pasteVal.trim()); setPasteVal(''); setShowPaste(false); } }} activeOpacity={0.75}
+            style={[s.btnGhost,{ paddingHorizontal:14 }]}>
+            <Txt style={[s.btnText,{ color:C.muted }]}>Add</Txt>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, transitions, guardPulls, takedowns, setSubmissions, setSweeps, setPositions, setTransitions, setGuardPulls, setTakedowns }) {
   const SUBTABS = ['Score','Submissions','Sweeps','Guard Pass','Transitions','Positions','Event Log'];
   const [subTab, setSubTab]         = useState('Score');
@@ -1422,15 +1647,36 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   const [showReset,  setShowReset]  = useState(false);
   const [customSubInput, setCSI]    = useState('');
   const [customSwpInput, setCSW]    = useState('');
+  const [manualSeconds, setManualSeconds] = useState(0); // fallback "current time" for links that can't play inline
+  const playerRef = useRef(null);
 
-  const isPaused = !!roll.paused;
-  const side     = trackingOpp ? 'opp' : 'me';
-  const pf       = field => trackingOpp ? `opp_${field}` : field;
-  const ac       = trackingOpp ? C.opp : C.gold;
+  const isPaused   = !!roll.paused;
+  const side       = trackingOpp ? 'opp' : 'me';
+  const pf         = field => trackingOpp ? `opp_${field}` : field;
+  const ac         = trackingOpp ? C.opp : C.gold;
+  const isDirectVid= isDirectVideoSource(roll.videoUrl);
+  const ytId       = roll.videoUrl ? getYouTubeId(roll.videoUrl) : null;
+
+  // Every tap gets timestamped the same way, whether that's the wall clock (live,
+  // with or without a video filming alongside) or the video's own playhead
+  // (reviewing footage with no live session behind it — see getVideoSeekSeconds
+  // for how these two shapes get converted back to a seek position later).
+  const getTs = () => {
+    if (roll.videoMode==='review') return isDirectVid ? (playerRef.current?.getPositionSeconds() ?? manualSeconds) : manualSeconds;
+    return Date.now();
+  };
+
+  const attachVideo = url => onMutate(r => ({ ...r, videoUrl:url, videoMode:null, videoSyncOffset:null }));
+  const clearVideo   = () => onMutate(r => ({ ...r, videoUrl:null, videoMode:null, videoSyncOffset:null }));
+  const setVideoMode = mode => onMutate(r => ({ ...r, videoMode:mode }));
+  const syncVideo     = () => {
+    const offset = isDirectVid ? (playerRef.current?.getPositionSeconds() ?? 0) : manualSeconds;
+    onMutate(r => ({ ...r, videoSyncOffset:offset }));
+  };
 
   const logEvent = (type,item,label,scoreKey=null) => {
     const se = scoreKey ? SCORE_EVENTS[scoreKey] : null;
-    const ev = { id:uid(), ts:Date.now(), side, type, item, label:label||(se?.label)||item, scoreKey, scored:!!scoreKey, pts:se?.pts||0 };
+    const ev = { id:uid(), ts:getTs(), side, type, item, label:label||(se?.label)||item, scoreKey, scored:!!scoreKey, pts:se?.pts||0 };
     onMutate(r => ({ ...r, eventLog:[...(r.eventLog||[]),ev] }));
   };
 
@@ -1451,14 +1697,14 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
       const pfx = subSide==='opp' ? 'opp_' : '';
       onMutate(r => {
         const key   = `${pfx}subCounts`;
-        const subEv = { id:uid(), ts:Date.now(), side:subSide, type:'submission', item:technique, label:technique, scoreKey:null, scored:false, pts:0 };
-        const rstEv = { id:uid(), ts:Date.now(), side:subSide, type:'reset', cause:'submission', technique, label:`Reset — submission: ${technique} (${subSide==='me'?'you':'opp'})`, scoreKey:null, scored:false, pts:0 };
+        const subEv = { id:uid(), ts:getTs(), side:subSide, type:'submission', item:technique, label:technique, scoreKey:null, scored:false, pts:0 };
+        const rstEv = { id:uid(), ts:getTs(), side:subSide, type:'reset', cause:'submission', technique, label:`Reset — submission: ${technique} (${subSide==='me'?'you':'opp'})`, scoreKey:null, scored:false, pts:0 };
         return { ...r, [key]:{ ...r[key], [technique]:(r[key][technique]||0)+1 }, eventLog:[...(r.eventLog||[]),subEv,rstEv] };
       });
       if (!submissions.includes(technique)) setSubmissions(ss=>[...ss,technique]);
     } else {
       onMutate(r => {
-        const rstEv = { id:uid(), ts:Date.now(), side:null, type:'reset', cause:'plain', technique:null, label:'Reset', scoreKey:null, scored:false, pts:0 };
+        const rstEv = { id:uid(), ts:getTs(), side:null, type:'reset', cause:'plain', technique:null, label:'Reset', scoreKey:null, scored:false, pts:0 };
         return { ...r, eventLog:[...(r.eventLog||[]),rstEv] };
       });
     }
@@ -1494,7 +1740,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
     };
 
     const ev = {
-      id:uid(), ts:Date.now(), side:s,
+      id:uid(), ts:getTs(), side:s,
       type: se.category,
       item: context.technique || context.advType || context.toPosition || se.label,
       label: buildLabel(),
@@ -1561,6 +1807,39 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
 
   return (
     <View>
+      {/* Video — attach, then either play inline or fall back to manual time entry */}
+      <VideoAttachRow videoUrl={roll.videoUrl} onAttach={attachVideo} onClear={clearVideo} disabled={isPaused}/>
+      {roll.videoUrl && (
+        isDirectVid
+          ? <InlineVideoPlayer ref={playerRef} uri={roll.videoUrl}/>
+          : <ManualTimeEntry url={roll.videoUrl} seconds={manualSeconds} onChangeSeconds={setManualSeconds}/>
+      )}
+      {roll.videoUrl && ytId && !isDirectVid && (
+        <View style={{ marginBottom:14, marginTop:-6 }}><TechVideoRef url={roll.videoUrl}/></View>
+      )}
+      {roll.videoUrl && !roll.videoMode && (
+        <View style={{ borderWidth:1, borderColor:C.border, padding:12, marginBottom:14 }}>
+          <Cap style={{ marginBottom:8 }}>How is this video being used?</Cap>
+          <View style={{ flexDirection:'row', gap:8 }}>
+            <TouchableOpacity onPress={()=>setVideoMode('live')} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:10 }]}>
+              <Txt style={[s.btnText,{ color:C.muted, fontSize:9 }]}>Filmed live — tracking as I go</Txt>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={()=>setVideoMode('review')} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:10 }]}>
+              <Txt style={[s.btnText,{ color:C.muted, fontSize:9 }]}>Logging this roll from the video now</Txt>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      {roll.videoUrl && roll.videoMode==='live' && roll.videoSyncOffset==null && (
+        <TouchableOpacity onPress={syncVideo} activeOpacity={0.75}
+          style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, padding:12, marginBottom:14, alignItems:'center' }}>
+          <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.gold, textAlign:'center' }}>⏱ Scrub to when the roll started, then tap here to sync</Txt>
+        </TouchableOpacity>
+      )}
+      {roll.videoUrl && roll.videoMode==='live' && roll.videoSyncOffset!=null && (
+        <View style={{ marginBottom:14 }}><Cap style={{ color:C.sage }}>✓ Synced — timestamps line up with this video</Cap></View>
+      )}
+
       {/* Score bar */}
       <View style={{ flexDirection:'row', gap:4, marginBottom:14 }}>
         <TouchableOpacity onPress={()=>setScoreSheet('me')} activeOpacity={0.75}
@@ -1676,7 +1955,10 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
         <PositionCountPanel positions={positions} posCounts={ak} onAdd={addPos} onRemove={i=>remCount('posCounts',i)} onAddPos={addCustomPos} disabled={disabled} ac={ac}/>
       )}
 
-      {subTab==='Event Log' && <EventLogPanel log={roll.eventLog||[]} onDeleteEvent={deleteEvent}/>}
+      {subTab==='Event Log' && (
+        <EventLogPanel log={roll.eventLog||[]} onDeleteEvent={deleteEvent} roll={roll}
+          onSeek={roll.videoUrl ? (isDirectVid ? sec=>playerRef.current?.seekTo(sec) : setManualSeconds) : null}/>
+      )}
 
       <QuickScoreSheet visible={scoreSheet!==null} isOpp={scoreSheet==='opp'} onClose={()=>setScoreSheet(null)}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}
@@ -5460,6 +5742,8 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
   const [viewingRoll, setViewing] = useState(null);
   const [showEnd, setShowEnd]     = useState(false);
   const [rollsState, setRollsState] = useState(rolls);
+  const viewPlayerRef = useRef(null);
+  const [viewManualSeconds, setViewManualSeconds] = useState(0);
 
   useEffect(() => setRollsState(rolls), [rolls]);
 
@@ -5468,6 +5752,7 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
   if (viewingRoll) {
     const current = [...(activeRoll?[activeRoll]:[]), ...rolls].find(r=>r.id===viewingRoll.id) || viewingRoll;
     const isActive = activeRoll?.id === viewingRoll.id;
+    const curIsDirect = isDirectVideoSource(current.videoUrl);
     return (
       <View style={{ flex:1 }}>
         <View style={{ backgroundColor:C.surface, borderBottomWidth:1, borderBottomColor:C.border, flexDirection:'row', alignItems:'center', padding:14, gap:12 }}>
@@ -5480,9 +5765,17 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
           </Txt>
         </View>
         <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
+          {current.videoUrl && (
+            curIsDirect
+              ? <InlineVideoPlayer ref={viewPlayerRef} uri={current.videoUrl}/>
+              : (getYouTubeId(current.videoUrl)
+                  ? <TechVideoRef url={current.videoUrl}/>
+                  : <ManualTimeEntry url={current.videoUrl} seconds={viewManualSeconds} onChangeSeconds={setViewManualSeconds}/>)
+          )}
           <ScoreComparison roll={current}/>
           <View style={{ height:16 }}/>
-          <EventLogPanel log={current.eventLog||[]}/>
+          <EventLogPanel log={current.eventLog||[]} roll={current}
+            onSeek={current.videoUrl ? (curIsDirect ? sec=>viewPlayerRef.current?.seekTo(sec) : setViewManualSeconds) : null}/>
         </ScrollView>
         {isActive && <>
           <View style={{ backgroundColor:C.faint, borderTopWidth:1, borderTopColor:C.border, flexDirection:'row', gap:8, padding:12 }}>
