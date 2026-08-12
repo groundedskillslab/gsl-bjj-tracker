@@ -914,7 +914,8 @@ function getExchanges(roll) {
 }
 function exchangeOutcome(ex) {
   if (ex.open) return { text:'Ongoing', color:C.muted };
-  if (ex.items.some(i=>i.classified===false)) return { text:'Unclassified', color:C.gold };
+  if (ex.items.some(i=>i.classified===false && i.scoreKey==null)) return { text:'Unclassified', color:C.gold };
+  if (ex.items.some(i=>i.classified===false)) return { text:'Pending detail', color:C.sand };
   const r = ex.endEvent;
   if (r?.cause==='submission') return { text:`Sub: ${r.technique} (${r.side==='me'?'you':'opp'})`, color:r.side==='me'?C.gold:C.opp };
   return { text:'No finish', color:C.muted };
@@ -954,13 +955,23 @@ function EventRow({ ev, fmtTs, canSeek, onSeek, onDelete, onClassify }) {
   const sc = ev.side==='me' ? C.gold : C.stone;
 
   if (ev.classified===false) {
+    const needsCategory = ev.scoreKey==null;
     return (
       <TouchableOpacity activeOpacity={onClassify?0.6:1} onPress={()=>onClassify&&onClassify(ev)}
         style={{ flexDirection:'row', alignItems:'center', paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.border }}>
         <View style={{ width:4, height:4, backgroundColor:sc, marginRight:12 }}/>
         <View style={{ flex:1 }}>
-          <Txt style={{ fontSize:13, fontFamily:F.medium, color:C.gold }}>Tap to classify</Txt>
-          <Txt style={{ fontSize:10, color:C.muted, marginTop:2 }}>{ev.side==='me'?'You':ev.side==='opp'?'Opp':''} · {fmtTs(ev)}</Txt>
+          <View style={{ flexDirection:'row', alignItems:'center', flexWrap:'wrap' }}>
+            <Txt style={{ fontSize:13, fontFamily:F.medium, color:C.gold }}>{needsCategory ? 'Tap to classify' : ev.label}</Txt>
+            {!needsCategory && ev.scored && ev.pts > 0 && (
+              <View style={{ marginLeft:8, borderWidth:1, borderColor:`${sc}44`, paddingHorizontal:5, paddingVertical:1 }}>
+                <Txt style={{ fontSize:8, color:sc, fontFamily:F.semi, letterSpacing:1.5 }}>+{ev.pts} PTS</Txt>
+              </View>
+            )}
+          </View>
+          <Txt style={{ fontSize:10, color:C.muted, marginTop:2 }}>
+            {ev.side==='me'?'You':ev.side==='opp'?'Opp':''} · {fmtTs(ev)}{needsCategory?'':' · tap to add technique'}
+          </Txt>
         </View>
         {onDelete && (
           <TouchableOpacity onPress={onDelete} style={{ padding:8 }} activeOpacity={0.7}>
@@ -1172,9 +1183,59 @@ function OptionList({ items, onPick, pts, accent, showPts=true,
 }
 
 // ─── Quick Score Sheet (Modal bottom sheet) ─────────────────────────────────────
-function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }) {
-  const [step,       setStep]       = useState('pick');
-  const [scoreKey,   setScoreKey]   = useState(null);
+// ─── Category Sheet (Modal bottom sheet) ────────────────────────────────────────
+// The FIRST decision after tapping You/Opponent: what kind of point was it. This
+// has to happen immediately, not later — the score bar's running total depends on
+// knowing category + points right away. Only the technique name gets deferred.
+function CategorySheet({ visible, isOpp, onClose, onPick }) {
+  const ac = isOpp ? C.stone : C.gold;
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex:1, justifyContent:'flex-end', backgroundColor:'rgba(10,10,8,0.8)' }}>
+        <TouchableOpacity style={{ flex:1 }} activeOpacity={1} onPress={onClose}/>
+        <View style={{ backgroundColor:C.surface, borderTopWidth:1, borderTopColor:C.borderMid,
+          paddingTop:20, paddingHorizontal:16, paddingBottom:Platform.OS==='ios'?36:16, maxHeight:'90%' }}>
+          <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+            <View>
+              <Cap style={{ marginBottom:2 }}>{isOpp?'Opponent':'You'}</Cap>
+              <Txt style={{ fontSize:14, fontFamily:F.semi, color:ac }}>What kind of point?</Txt>
+            </View>
+            <TouchableOpacity onPress={onClose}
+              style={{ width:32, height:32, borderWidth:1, borderColor:C.border, alignItems:'center', justifyContent:'center' }}
+              activeOpacity={0.7}>
+              <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
+            </TouchableOpacity>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
+            {Object.entries(SCORE_EVENTS).map(([key,ev]) => (
+              <TouchableOpacity key={key} onPress={()=>onPick(key)} activeOpacity={0.75}
+                style={{ flexDirection:'row', alignItems:'center', padding:14, marginBottom:4, borderWidth:1, borderColor:C.border }}>
+                <Txt style={{ fontSize:18, width:26, textAlign:'center', marginRight:14 }}>{ev.icon}</Txt>
+                <View style={{ flex:1 }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi }}>{ev.label}</Txt>
+                  <Cap style={{ marginTop:2, fontSize:8 }}>{ev.desc}</Cap>
+                </View>
+                <View style={{ borderWidth:1, borderColor:`${ev.color}44`, paddingHorizontal:8, paddingVertical:3 }}>
+                  <Txt style={{ fontSize:9, color:ev.color, fontFamily:F.semi, letterSpacing:2 }}>{ev.pts>0?`+${ev.pts} PTS`:'ADV'}</Txt>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// The category has already been decided (via CategorySheet) by the time this
+// opens — it only ever walks the technique/context steps for that one category.
+const FIRST_DETAIL_STEP = {
+  sweep:'sweep_startPos', takedown:'td_technique', guardPass:'gp_guardType',
+  guardPull:'pull_endPos', advantage:'adv_type',
+};
+function QuickScoreSheet({ visible, isOpp, scoreKey, onClose, onRecord, allTechniques=[] }) {
+  const firstStep = FIRST_DETAIL_STEP[scoreKey] || 'sweep_startPos';
+  const [step,       setStep]       = useState(firstStep);
   const [sel1,       setSel1]       = useState(null);
   const [customVal,  setCustomVal]  = useState('');
   const [showCustom, setShowCustom] = useState(false);
@@ -1182,7 +1243,11 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
   const inputRef   = useRef(null);
   const ac = isOpp ? C.stone : C.gold;
 
-  const reset = () => { setStep('pick'); setScoreKey(null); setSel1(null); setCustomVal(''); setShowCustom(false); };
+  useEffect(() => {
+    if (visible) { setStep(FIRST_DETAIL_STEP[scoreKey] || 'sweep_startPos'); setSel1(null); setCustomVal(''); setShowCustom(false); }
+  }, [visible, scoreKey]);
+
+  const reset = () => { setStep(firstStep); setSel1(null); setCustomVal(''); setShowCustom(false); };
   const close = () => { onClose(); reset(); };
 
   const openCustom = () => {
@@ -1194,26 +1259,9 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
     }, 80);
   };
 
-  const finish = (key, context={}) => { onRecord(key, context); close(); };
-
-  const pickEvent = key => {
-    const ev = SCORE_EVENTS[key];
-    setScoreKey(key);
-    setSel1(null); setCustomVal(''); setShowCustom(false);
-    switch(ev.category) {
-      case 'sweep':     setStep('sweep_startPos'); break;
-      case 'takedown':  setStep('td_technique');   break;
-      case 'guardPass': setStep('gp_guardType');   break;
-      case 'guardPull': setStep('pull_endPos');     break;
-      case 'advantage': setStep('adv_type');        break;
-      default:          finish(key, {}); break;
-    }
-  };
-
-
+  const finish = (context={}) => { onRecord(context); close(); };
 
   const stepHeaders = {
-    pick:           'Record Score',
     sweep_startPos: 'Sweep · Starting Position',
     sweep_tech:     'Sweep · Technique',
     td_technique:   'Takedown · Technique',
@@ -1224,13 +1272,13 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
     adv_type:       'Advantage · For What?',
   };
 
-  const canGoBack = step !== 'pick';
+  const canGoBack = step !== FIRST_DETAIL_STEP[scoreKey];
   const handleBack = () => {
     switch(step) {
       case 'sweep_tech':   setStep('sweep_startPos'); setSel1(null); break;
       case 'td_endPos':    setStep('td_technique');   setSel1(null); break;
       case 'gp_technique': setStep('gp_guardType');   setSel1(null); break;
-      default:             reset(); break;
+      default: break;
     }
     setShowCustom(false); setCustomVal('');
   };
@@ -1263,7 +1311,7 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
                 )}
                 <View>
                   <Cap style={{ marginBottom:2 }}>{isOpp?'Opponent':'You'}</Cap>
-                  <Txt style={{ fontSize:14, fontFamily:F.semi, color:ac }}>{stepHeaders[step]||'Record Score'}</Txt>
+                  <Txt style={{ fontSize:14, fontFamily:F.semi, color:ac }}>{stepHeaders[step]||'Add technique'}</Txt>
                 </View>
               </View>
               <TouchableOpacity onPress={close}
@@ -1272,26 +1320,6 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
                 <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
               </TouchableOpacity>
             </View>
-
-            {/* Pick event */}
-            {step==='pick' && (
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
-                {Object.entries(SCORE_EVENTS).map(([key,ev]) => (
-                  <TouchableOpacity key={key} onPress={()=>pickEvent(key)} activeOpacity={0.75}
-                    style={{ flexDirection:'row', alignItems:'center', padding:14, marginBottom:4, borderWidth:1, borderColor:C.border }}>
-                    <Txt style={{ fontSize:18, width:26, textAlign:'center', marginRight:14 }}>{ev.icon}</Txt>
-                    <View style={{ flex:1 }}>
-                      <Txt style={{ fontSize:13, fontFamily:F.semi }}>{ev.label}</Txt>
-                      <Cap style={{ marginTop:2, fontSize:8 }}>{ev.desc}</Cap>
-                    </View>
-                    <View style={{ borderWidth:1, borderColor:`${ev.color}44`, paddingHorizontal:8, paddingVertical:3 }}>
-                      <Txt style={{ fontSize:9, color:ev.color, fontFamily:F.semi, letterSpacing:2 }}>{ev.pts>0?`+${ev.pts} PTS`:'ADV'}</Txt>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-
 
             {/* All OptionList steps share these keyboard/custom props */}
             {(step==='sweep_startPos'||step==='sweep_tech'||step==='td_technique'||step==='td_endPos'||step==='gp_guardType'||step==='gp_technique'||step==='pull_endPos'||step==='adv_type') && (() => {
@@ -1307,26 +1335,26 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
                 onCustomSubmit={()=>{ if(customVal.trim()){ const p=customVal.trim(); setCustomVal(''); setShowCustom(false); setSel1(p); setStep('sweep_tech'); }}}
                 onPick={pos=>{ setSel1(pos); setStep('sweep_tech'); setShowCustom(false); setCustomVal(''); }}/>;
               if (step==='sweep_tech') return <OptionList {...sharedProps} items={DEF_SWEEPS} pts={2}
-                onCustomSubmit={()=>{ if(customVal.trim()) finish('sweep',{technique:customVal.trim(),fromPosition:sel1}); }}
-                onPick={tech=>finish('sweep',{technique:tech,fromPosition:sel1})}/>;
+                onCustomSubmit={()=>{ if(customVal.trim()) finish({technique:customVal.trim(),fromPosition:sel1}); }}
+                onPick={tech=>finish({technique:tech,fromPosition:sel1})}/>;
               if (step==='td_technique') return <OptionList {...sharedProps} items={DEF_TAKEDOWNS} showPts={false}
                 onCustomSubmit={()=>{ if(customVal.trim()){ const t=customVal.trim(); setCustomVal(''); setShowCustom(false); setSel1(t); setStep('td_endPos'); }}}
                 onPick={tech=>{ setSel1(tech); setStep('td_endPos'); setShowCustom(false); setCustomVal(''); }}/>;
               if (step==='td_endPos') return <OptionList {...sharedProps} items={DEF_POS} pts={2}
-                onCustomSubmit={()=>{ if(customVal.trim()) finish('takedown',{technique:sel1,toPosition:customVal.trim()}); }}
-                onPick={pos=>finish('takedown',{technique:sel1,toPosition:pos})}/>;
+                onCustomSubmit={()=>{ if(customVal.trim()) finish({technique:sel1,toPosition:customVal.trim()}); }}
+                onPick={pos=>finish({technique:sel1,toPosition:pos})}/>;
               if (step==='gp_guardType') return <OptionList {...sharedProps} items={DEF_GUARD_TYPES} showPts={false}
                 onCustomSubmit={()=>{ if(customVal.trim()){ const g=customVal.trim(); setCustomVal(''); setShowCustom(false); setSel1(g); setStep('gp_technique'); }}}
                 onPick={guard=>{ setSel1(guard); setStep('gp_technique'); setShowCustom(false); setCustomVal(''); }}/>;
               if (step==='gp_technique') return <OptionList {...sharedProps} items={DEF_GUARD_PASSES} pts={3}
-                onCustomSubmit={()=>{ if(customVal.trim()) finish('guardPass',{guardPassed:sel1,technique:customVal.trim()}); }}
-                onPick={tech=>finish('guardPass',{guardPassed:sel1,technique:tech})}/>;
+                onCustomSubmit={()=>{ if(customVal.trim()) finish({guardPassed:sel1,technique:customVal.trim()}); }}
+                onPick={tech=>finish({guardPassed:sel1,technique:tech})}/>;
               if (step==='pull_endPos') return <OptionList {...sharedProps} items={DEF_POS} pts={0}
-                onCustomSubmit={()=>{ if(customVal.trim()) finish('guardPull',{toPosition:customVal.trim()}); }}
-                onPick={pos=>finish('guardPull',{toPosition:pos})}/>;
+                onCustomSubmit={()=>{ if(customVal.trim()) finish({toPosition:customVal.trim()}); }}
+                onPick={pos=>finish({toPosition:pos})}/>;
               if (step==='adv_type') return <OptionList {...sharedProps} items={ADV_TYPES} pts={0}
-                onCustomSubmit={()=>{ if(customVal.trim()) finish('advantage',{advType:customVal.trim()}); }}
-                onPick={type=>finish('advantage',{advType:type})}/>;
+                onCustomSubmit={()=>{ if(customVal.trim()) finish({advType:customVal.trim()}); }}
+                onPick={type=>finish({advType:type})}/>;
             })()}
 
           </View>
@@ -1663,7 +1691,8 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   const SUBTABS = ['Score','Submissions','Sweeps','Guard Pass','Transitions','Positions','Event Log'];
   const [subTab, setSubTab]         = useState('Score');
   const [trackingOpp, setTracking]  = useState(false);
-  const [classifyingId, setClassifyingId] = useState(null); // id of the marker being classified, or null
+  const [classifyingId, setClassifyingId] = useState(null); // id of the marker getting its technique filled in, or null
+  const [categoryId,    setCategoryId]    = useState(null); // id of the marker getting its category picked, or null
   const [showReset,  setShowReset]  = useState(false);
   const [customSubInput, setCSI]    = useState('');
   const [customSwpInput, setCSW]    = useState('');
@@ -1736,7 +1765,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
     addTrans(n);
   };
 
-  // Shared by quickScore (creates + classifies in one step) and classifyMarker
+  // Shared by quickScore (creates + classifies in one step) and classifyDetail
   // (classifies a marker that was already tapped, at whatever moment that was).
   // Same fields, same count bumps, either way — the only difference is whether
   // there's a brand-new event or an existing unclassified one to fill in.
@@ -1799,26 +1828,53 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
     return u;
   };
 
-  // Mark now: drop a bare, unclassified event the instant something happens —
-  // no modal, no decision, just a timestamped side. Classification happens later.
+  // Mark now: capture the timestamp and side instantly, then immediately ask
+  // which category it was — that part can't wait, since the score bar's running
+  // total depends on knowing points right away. Only technique gets deferred.
   const markEvent = isOpp => {
     if (isPaused) return;
+    const id = uid();
     onMutate(r => ({ ...r, eventLog:[...(r.eventLog||[]), {
-      id:uid(), ts:getTs(), side:isOpp?'opp':'me',
+      id, ts:getTs(), side:isOpp?'opp':'me',
       type:null, item:null, label:null, scoreKey:null, scored:false, pts:0, classified:false,
     }] }));
+    setCategoryId(id);
   };
 
-  // Classify later: fill in an already-marked event with what it actually was.
-  const classifyMarker = (id, scoreKey, context={}) => {
+  // Categories with no further technique-detail step — picking the category IS
+  // the complete classification (matches how QuickScoreSheet always finished
+  // these immediately, before any of the mark-first work existed).
+  const NEEDS_DETAIL = { sweep:true, takedown:true, guardPass:true, guardPull:true, advantage:true };
+
+  // Step one: lock in category + points right away. If this category has no
+  // further detail step (mount/backControl/kneeOnBelly), it's fully done here.
+  const classifyCategory = (id, scoreKey) => {
+    const se = SCORE_EVENTS[scoreKey]; if(!se) return;
     const marker = (roll.eventLog||[]).find(e=>e.id===id); if(!marker) return;
-    const fields = buildScoreEventFields(scoreKey, context); if(!fields) return;
+    const pfx = marker.side==='opp' ? 'opp_' : '';
+    const needsDetail = !!NEEDS_DETAIL[scoreKey];
+    const fields = { type:se.category, scoreKey, scored:se.pts>0, pts:se.pts, item:se.label, label:se.label, classified:!needsDetail };
+    onMutate(r => {
+      let u = { ...r, eventLog:(r.eventLog||[]).map(e=>e.id===id?{...e,...fields}:e) };
+      if (!needsDetail) u = applyScoreCounts(u, pfx, scoreKey, {});
+      return u;
+    });
+  };
+
+  // Step two, whenever there's time: fill in the actual technique. Category and
+  // points don't change here — this only ever adds detail to what's already scored.
+  const classifyDetail = (id, context={}) => {
+    const marker = (roll.eventLog||[]).find(e=>e.id===id); if(!marker || !marker.scoreKey) return;
+    const fields = buildScoreEventFields(marker.scoreKey, context); if(!fields) return;
     const pfx = marker.side==='opp' ? 'opp_' : '';
     onMutate(r => {
       const u = { ...r, eventLog:(r.eventLog||[]).map(e=>e.id===id?{...e,...fields}:e) };
-      return applyScoreCounts(u, pfx, scoreKey, context);
+      return applyScoreCounts(u, pfx, marker.scoreKey, context);
     });
   };
+
+  // Routes a pending marker to whichever sheet it actually needs next.
+  const openPending = ev => { if (ev.scoreKey==null) setCategoryId(ev.id); else setClassifyingId(ev.id); };
 
   // Still used internally where an immediate, single-step score makes sense.
   const quickScore = (isOpp, scoreKey, context={}) => {
@@ -1893,13 +1949,13 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
           <Cap style={{ color:C.stone, fontSize:7 }}>Score</Cap>
         </TouchableOpacity>
       </View>
-      <Cap style={{ textAlign:'center', marginBottom:8, color:C.muted }}>Tap when it happens — say what it was after</Cap>
+      <Cap style={{ textAlign:'center', marginBottom:8, color:C.muted }}>Tap, pick the category — technique comes later</Cap>
 
       {(() => {
         const unclassified = (roll.eventLog||[]).filter(e=>e.classified===false);
         if (!unclassified.length) return null;
         return (
-          <TouchableOpacity onPress={()=>setClassifyingId(unclassified[0].id)} activeOpacity={0.75}
+          <TouchableOpacity onPress={()=>openPending(unclassified[0])} activeOpacity={0.75}
             style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, paddingVertical:10, alignItems:'center', marginBottom:14 }}>
             <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.gold }}>{unclassified.length} to classify — tap to continue</Txt>
           </TouchableOpacity>
@@ -2005,14 +2061,19 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
       {subTab==='Event Log' && (
         <EventLogPanel log={roll.eventLog||[]} onDeleteEvent={deleteEvent} roll={roll}
           onSeek={roll.videoUrl ? (isDirectVid ? sec=>playerRef.current?.seekTo(sec) : setManualSeconds) : null}
-          onClassify={ev=>setClassifyingId(ev.id)}/>
+          onClassify={openPending}/>
       )}
 
+      <CategorySheet visible={categoryId!==null}
+        isOpp={(roll.eventLog||[]).find(e=>e.id===categoryId)?.side==='opp'}
+        onClose={()=>setCategoryId(null)}
+        onPick={key=>{ classifyCategory(categoryId,key); setCategoryId(null); }}/>
       <QuickScoreSheet visible={classifyingId!==null}
         isOpp={(roll.eventLog||[]).find(e=>e.id===classifyingId)?.side==='opp'}
+        scoreKey={(roll.eventLog||[]).find(e=>e.id===classifyingId)?.scoreKey}
         onClose={()=>setClassifyingId(null)}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}
-        onRecord={(key,context)=>{ classifyMarker(classifyingId,key,context||{}); setClassifyingId(null); }}/>
+        onRecord={(context)=>{ classifyDetail(classifyingId,context||{}); setClassifyingId(null); }}/>
       <ResetSheet visible={showReset} onClose={()=>setShowReset(false)}
         onConfirm={confirmReset} submissions={submissions}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}/>
