@@ -1,16 +1,13 @@
 [build]
-  command = "npm install && expo export -p web && echo '/* /index.html 200' > dist/_redirects && cp manifest.json dist/manifest.json && sed -i 's|</head>|<link rel=\"manifest\" href=\"/manifest.json\"><meta name=\"apple-mobile-web-app-capable\" content=\"yes\"><meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\"><meta name=\"apple-mobile-web-app-title\" content=\"GSL BJJ\"><link rel=\"apple-touch-icon\" href=\"/assets/icon.png\"></head>|' dist/index.html"
+  command = '''npm install && expo export -p web && mkdir -p dist/assets && cp assets/icon.png dist/assets/icon.png && echo '/* /index.html 200' > dist/_redirects && cp manifest.json dist/manifest.json && sed -i 's|</head>|<link rel="manifest" href="/manifest.json"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="MatAnalyst"><link rel="apple-touch-icon" href="/assets/icon.png"></head>|' dist/index.html'''
   publish = "dist"
-
 [build.environment]
   NODE_VERSION = "20"
   EXPO_NO_TELEMETRY = "1"
-
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
 [[headers]]
   for = "/*"
   [headers.values]

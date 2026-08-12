@@ -1,11 +1,11 @@
 {
-  "name": "Grounded Skills Lab",
-  "short_name": "GSL BJJ",
-  "description": "BJJ analytics and training tracker for Grounded Skills Lab",
+  "name": "MatAnalyst",
+  "short_name": "MatAnalyst",
+  "description": "BJJ analytics and training tracker by Grounded Skills Lab",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0D0D0B",
-  "theme_color": "#C8A24D",
+  "background_color": "#EDE9DF",
+  "theme_color": "#C95F3D",
   "orientation": "portrait",
   "icons": [
     {
