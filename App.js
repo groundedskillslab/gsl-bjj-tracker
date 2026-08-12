@@ -1,17 +1,20 @@
 /**
- * GROUNDED SKILLS LAB — BJJ TRACKER
+ * MATANALYST — BJJ TRACKER
+ * by Grounded Skills Lab
  * React Native / Expo App — Supabase Edition
- * Train. Measure. Improve. Repeat.
+ * A smarter way to analyze your game.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
-  StyleSheet, Modal, Alert, Platform, Dimensions,
+  StyleSheet, Modal, Alert, Platform, Dimensions, Linking,
   KeyboardAvoidingView, FlatList, Switch, StatusBar, Image, ActivityIndicator,
 } from 'react-native';
 import Svg, { Rect, Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import * as Font from 'expo-font';
+import { Video, ResizeMode } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from './supabase';
 
 // URL polyfill — native only (browser already has the URL API built in)
@@ -32,75 +35,76 @@ const SIDE_INSET = 0;
 // ─── Theme Palettes ────────────────────────────────────────────────────────────
 const DARK = {
   bg:        '#0D0D0B',
-  surface:   '#141412',
-  card:      '#1C1C18',
-  border:    '#2C2C26',
-  borderMid: '#3C3C34',
-  charcoal:  '#1C1C1E',
+  surface:   '#161613',
+  card:      '#1E1E1A',
+  border:    '#2E2E28',
+  borderMid: '#3E3E36',
+  charcoal:  '#0D0D0D',
   stone:     '#9A9A8E',
-  sand:      '#DCCC86',
+  sand:      '#C9B896',
   offWhite:  '#F5F3EF',
-  sage:      '#5A9E50',  // brighter green for legibility
-  gold:      '#C8A24D',
-  goldLight: '#E2C87A',
-  goldSoft:  'rgba(200,162,77,0.15)',
-  goldDim:   'rgba(200,162,77,0.08)',
-  green:     '#5A9E50',
-  red:       '#C04040',  // brighter red
-  amber:     '#C8A24D',
-  amberSoft: 'rgba(200,162,77,0.15)',
-  teal:      '#3A9E8E',  // brighter teal
-  blue:      '#5A82A0',
-  opp:       '#8B7A9A',
-  oppSoft:   'rgba(139,122,154,0.15)',
-  oppDim:    '#3A3244',
+  sage:      '#8AA378',  // Olive, brightened for dark-bg legibility
+  gold:      '#D97C5C',  // Rust, brightened for dark-bg legibility
+  goldLight: '#E39A80',
+  goldSoft:  'rgba(217,124,92,0.16)',
+  goldDim:   'rgba(217,124,92,0.08)',
+  green:     '#8AA378',
+  red:       '#C25A45',  // brighter brick for legibility
+  amber:     '#C9A25E',
+  amberSoft: 'rgba(201,162,94,0.15)',
+  teal:      '#7A9088',  // brighter muted sage-teal
+  blue:      '#7C8B98',
+  opp:       '#A08A82',
+  oppSoft:   'rgba(160,138,130,0.15)',
+  oppDim:    '#3A3430',
   text:      '#F0EDE6',  // warm white — main text
   textDim:   '#C0BDB5',  // secondary text — clearly readable
-  muted:     '#7A7870',  // muted labels — not too dark
+  muted:     '#8C8778',  // muted labels — not too dark
   faint:     '#222220',
 };
 
 const LIGHT = {
-  bg:        '#F5F3EF',
-  surface:   '#FFFFFF',
-  card:      '#F0EDE8',
-  border:    '#DEDAD4',
-  borderMid: '#C8C4BC',
-  charcoal:  '#1C1C1E',
-  stone:     '#5A5A56',
-  sand:      '#B89A4A',
-  offWhite:  '#1C1C1E',
-  sage:      '#2E7E24',  // stronger green
-  gold:      '#9A7030',
-  goldLight: '#C8A24D',
-  goldSoft:  'rgba(154,112,48,0.12)',
-  goldDim:   'rgba(154,112,48,0.07)',
-  green:     '#2E7E24',
-  red:       '#B03030',  // stronger red
-  amber:     '#8A6A20',
-  amberSoft: 'rgba(138,106,32,0.12)',
-  teal:      '#1A6A60',  // stronger teal
-  blue:      '#2A4A6A',
-  opp:       '#5A4A70',
-  oppSoft:   'rgba(90,74,112,0.12)',
-  oppDim:    '#E8E4F0',
-  text:      '#1A1A1C',  // near-black for max contrast
-  textDim:   '#3A3A3E',
-  muted:     '#6A6A70',
-  faint:     '#E8E4DC',
+  // MatAnalyst — Option D (Black / Bone / Rust / Olive / Soft Gray)
+  bg:        '#EDE9DF',  // Bone — page wash
+  surface:   '#F1F1F1',  // Soft Gray — header/nav surface
+  card:      '#FFFFFF',
+  border:    '#E3DFD3',
+  borderMid: '#D3CDBC',
+  charcoal:  '#0D0D0D',  // Black
+  stone:     '#6B6B63',
+  sand:      '#C9B896',
+  offWhite:  '#FAF8F4',
+  sage:      '#4F5C44',  // Olive, darkened for AA text contrast on light bg
+  gold:      '#B5502F',  // Rust, darkened for AA text contrast on light bg
+  goldLight: '#C95F3D',
+  goldSoft:  'rgba(201,95,61,0.13)',
+  goldDim:   'rgba(201,95,61,0.07)',
+  green:     '#4F5C44',
+  red:       '#8B3A2A',
+  amber:     '#8A6A34',
+  amberSoft: 'rgba(138,106,52,0.13)',
+  teal:      '#465049',
+  blue:      '#44515C',
+  opp:       '#5E4C46',
+  oppSoft:   'rgba(94,76,70,0.13)',
+  oppDim:    '#E8DFD8',
+  text:      '#17160F',  // near-black
+  textDim:   '#4A473F',
+  muted:     '#7A7566',
+  faint:     '#F7F4EE',
 };
 
 // ThemeContext — provides current palette to all components
-const ThemeContext = React.createContext(DARK);
+const ThemeContext = React.createContext(LIGHT);  // MatAnalyst is light-first (Option D)
 const useTheme = () => React.useContext(ThemeContext);
 
 // Global mutable C reference — updated when theme switches
 // Components that use C directly (outside render) reference this
-let C = { ...DARK };
+let C = { ...LIGHT };  // MatAnalyst is light-first (Option D)
 
-const PIE_DARK  = ['#C8A24D','#7A8F72','#5A7A72','#4A6280','#9B4040','#B89A4A','#DCCC86','#8E8E82','#6B5E7A'];
-const PIE_LIGHT = ['#9A7030','#4A6E40','#2A5A52','#2A4A6A','#8B2A2A','#8A6A20','#B89A4A','#6A6660','#5A4A70'];
-let PIE = [...PIE_DARK];
+const PIE_DARK  = ['#D97C5C','#8AA378','#7A9088','#7C8B98','#C25A45','#C9A25E','#C9B896','#9A9A8E','#A08A82'];
+const PIE_LIGHT = ['#B5502F','#4F5C44','#465049','#44515C','#8B3A2A','#8A6A34','#C9B896','#6B6B63','#5E4C46'];
+let PIE = [...PIE_LIGHT];  // MatAnalyst is light-first (Option D)
 
 // ─── IBJJF Scoring ─────────────────────────────────────────────────────────────
 const SCORE_EVENTS = {
@@ -173,6 +177,7 @@ const ADULT_BELTS    = BELT_ORDER.filter(b => !BELT_COLORS[b]?.juvenile);
 const TABS = [
   { key:'Track',    label:'Track',    icon:'🥋' },
   { key:'Journal',  label:'Journal',  icon:'📖' },
+  { key:'Targets',  label:'Targets',  icon:'🎯' },
   { key:'Academy',  label:'Academy',  icon:'🏫' },
   { key:'Charts',   label:'Charts',   icon:'📊' },
   { key:'Rolls',    label:'Rolls',    icon:'⚔️' },
@@ -186,6 +191,7 @@ const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
   return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
 });
 const fmtSecs     = s => { if(!s) return '0s'; const m=Math.floor(s/60),sc=s%60; return m>0?`${m}m${sc>0?` ${sc}s`:''}` :`${sc}s`; };
+const fmtClock     = s => { s=Math.max(0,Math.round(s||0)); const m=Math.floor(s/60),sc=s%60; return `${m}:${String(sc).padStart(2,'0')}`; };
 const fmtDateTime = ts => new Date(ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 const fmtTime     = ts => new Date(ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 const fmtCompDate = d  => { if(!d)return''; const[y,m,day]=d.split('-'); return new Date(+y,+m-1,+day).toLocaleDateString([],{month:'long',day:'numeric',year:'numeric'}); };
@@ -193,10 +199,38 @@ const abbrevName  = (full='') => { const p=full.trim().split(/\s+/).filter(Boole
 
 const emptyRoll = (partner='',isComp=false) => ({
   id:uid(), partner, startedAt:Date.now(), endedAt:null, isComp, notes:'',
-  subCounts:{}, sweepCounts:{}, posDurations:{}, posCounts:{}, transCounts:{}, guardPassCounts:{},
-  opp_subCounts:{}, opp_sweepCounts:{}, opp_posDurations:{}, opp_posCounts:{}, opp_transCounts:{}, opp_guardPassCounts:{},
+  subCounts:{}, sweepCounts:{}, posCounts:{}, transCounts:{}, guardPassCounts:{},
+  opp_subCounts:{}, opp_sweepCounts:{}, opp_posCounts:{}, opp_transCounts:{}, opp_guardPassCounts:{},
   eventLog:[], paused:false, pausedAt:null, totalPausedMs:0,
+  // videoUrl: local file URI, YouTube link, or any pasted link — whatever the athlete points at.
+  // videoMode: 'live'   → events are timestamped in wall-clock ms, converted via videoSyncOffset.
+  //            'review' → events are timestamped directly in video-seconds, no conversion needed.
+  //            null     → no video attached.
+  videoUrl:null, videoMode:null, videoSyncOffset:null,
 });
+
+// ─── Video seek helper ──────────────────────────────────────────────────────────
+// One shared function so every screen that wants to jump a video to an event's
+// moment does the conversion the same way, regardless of which pathway logged it.
+const getVideoSeekSeconds = (roll, event) => {
+  if (!roll?.videoUrl || event?.ts==null) return null;
+  if (roll.videoMode === 'review') return typeof event.ts === 'number' ? event.ts : null;
+  if (roll.videoMode === 'live') {
+    if (roll.videoSyncOffset==null || !roll.startedAt) return null; // filmed but not yet synced
+    return Math.max(0, (event.ts - roll.startedAt)/1000 + roll.videoSyncOffset);
+  }
+  return null;
+};
+
+// Is this a source expo-av's <Video> can actually decode and seek natively?
+// Local picker files and direct file links (mp4/mov/m3u8/webm) — yes.
+// YouTube and share-page links (Drive/Dropbox/iCloud previews) — no, those need
+// the embed-or-external fallback instead.
+const isDirectVideoSource = url => {
+  if (!url) return false;
+  if (url.startsWith('file://') || url.startsWith('ph://') || url.startsWith('content://')) return true;
+  return /\.(mp4|mov|m3u8|webm)(\?.*)?$/i.test(url.trim());
+};
 
 const emptyProfileData = () => ({
   submissions: DEF_SUBS, sweeps: DEF_SWEEPS, positions: DEF_POS,
@@ -407,6 +441,27 @@ const db = {
   async deleteCompetition(id) {
     await supabase.from('competitions').delete().eq('id', id);
   },
+
+  // ── Targets ───────────────────────────────────────────────────────────────────
+  async getTargets(athleteId) {
+    const { data } = await supabase.from('targets').select('*')
+      .eq('athlete_id', athleteId).order('created_at', { ascending: false });
+    return (data || []).map(fromDbTarget);
+  },
+  async createTarget(target) {
+    const { data, error } = await supabase.from('targets').insert(toDbTarget(target)).select().single();
+    if (error) { console.error('createTarget error:', error.message); throw error; }
+    return fromDbTarget(data);
+  },
+  async updateTargetSteps(id, steps, resolvedAt) {
+    const { error } = await supabase.from('targets')
+      .update({ steps, resolved_at: resolvedAt })
+      .eq('id', id);
+    if (error) console.error('updateTargetSteps error:', error.message);
+  },
+  async deleteTarget(id) {
+    await supabase.from('targets').delete().eq('id', id);
+  },
 };
 
 // ── Shape converters: app ↔ database ─────────────────────────────────────────
@@ -419,12 +474,13 @@ function toDbRoll(r) {
     duration: r.duration, is_active: r.isActive || false,
     event_log: r.eventLog || [],
     sub_counts: r.subCounts || {}, sweep_counts: r.sweepCounts || {},
-    pos_durations: r.posDurations || {}, trans_counts: r.transCounts || {},
+    pos_durations: r.posDurations || {}, pos_counts: r.posCounts || {}, trans_counts: r.transCounts || {},
     guard_pass_counts: r.guardPassCounts || {},
     opp_sub_counts: r.opp_subCounts || {}, opp_sweep_counts: r.opp_sweepCounts || {},
-    opp_pos_durations: r.opp_posDurations || {}, opp_trans_counts: r.opp_transCounts || {},
+    opp_pos_durations: r.opp_posDurations || {}, opp_pos_counts: r.opp_posCounts || {}, opp_trans_counts: r.opp_transCounts || {},
     opp_guard_pass_counts: r.opp_guardPassCounts || {},
     paused: r.paused || false, paused_at: r.pausedAt, total_paused_ms: r.totalPausedMs || 0,
+    video_url: r.videoUrl || null, video_mode: r.videoMode || null, video_sync_offset: r.videoSyncOffset ?? null,
   };
 }
 function fromDbRoll(r) {
@@ -436,12 +492,13 @@ function fromDbRoll(r) {
     duration: r.duration, isActive: r.is_active,
     eventLog: r.event_log || [],
     subCounts: r.sub_counts || {}, sweepCounts: r.sweep_counts || {},
-    posDurations: r.pos_durations || {}, transCounts: r.trans_counts || {},
+    posDurations: r.pos_durations || {}, posCounts: r.pos_counts || {}, transCounts: r.trans_counts || {},
     guardPassCounts: r.guard_pass_counts || {},
     opp_subCounts: r.opp_sub_counts || {}, opp_sweepCounts: r.opp_sweep_counts || {},
-    opp_posDurations: r.opp_pos_durations || {}, opp_transCounts: r.opp_trans_counts || {},
+    opp_posDurations: r.opp_pos_durations || {}, opp_posCounts: r.opp_pos_counts || {}, opp_transCounts: r.opp_trans_counts || {},
     opp_guardPassCounts: r.opp_guard_pass_counts || {},
     paused: r.paused, pausedAt: r.paused_at, totalPausedMs: r.total_paused_ms || 0,
+    videoUrl: r.video_url || null, videoMode: r.video_mode || null, videoSyncOffset: r.video_sync_offset ?? null,
   };
 }
 function toDbRound(r, competitionId, athleteId) {
@@ -487,6 +544,23 @@ function fromDbComp(c) {
   };
 }
 
+function toDbTarget(t) {
+  return {
+    id: t.id, athlete_id: t.athleteId, mode: t.mode,
+    gi: t.gi || null, source: t.source || null,
+    steps: t.steps || [], resolved_at: t.resolvedAt || null,
+    roll_id: t.rollId || null,
+  };
+}
+function fromDbTarget(t) {
+  return {
+    id: t.id, athleteId: t.athlete_id, mode: t.mode,
+    gi: t.gi, source: t.source,
+    steps: t.steps || [], resolvedAt: t.resolved_at,
+    rollId: t.roll_id, createdAt: t.created_at,
+  };
+}
+
 // ─── Typography helpers ─────────────────────────────────────────────────────────
 // Inter for all UI / body text
 // DM Serif Display for headings, large numbers, scores — more legible at size
@@ -495,12 +569,12 @@ const F = {
   medium:  'Inter_500Medium',
   semi:    'Inter_600SemiBold',
   bold:    'Inter_700Bold',
-  display: 'DMSerifDisplay_400Regular',
+  display: 'Inter_700Bold',   // MatAnalyst style guide specifies Inter throughout — no serif
   // Aliases so existing fontFamily references still resolve
   light:   'Inter_400Regular',
   regular: 'Inter_400Regular',
   extra:   'Inter_700Bold',
-  black:   'DMSerifDisplay_400Regular',
+  black:   'Inter_700Bold',
 };
 
 // ─── Reusable style helpers ─────────────────────────────────────────────────────
@@ -609,21 +683,51 @@ function useConfirm() {
   return [confirm, Dialog];
 }
 
-// ─── GSL Logo — uses the actual brand PNG asset ────────────────────────────────
-const GSL_LOGO = require('./assets/icon.png');
+// ─── MatAnalyst primary logo — official mark, 4 modules rotated around center.
+// Vector source: matanalyst_mark_primary.svg. Recolored to the app's Black/Charcoal
+// token so it stays consistent with the rest of the Option D palette. Transparent
+// background — this is the in-app mark, not the OS icon tile (see assets/icon.png
+// for that, built from the separate "app icon" variant with its own dark tile). ──
+const MARK_MODULE_D = "M 394.0,150.0 H 788.0 Q 850.0,150.0 850.0,212.0 V 298.0 Q 850.0,360.0 788.0,360.0 H 394.0 Z";
 
-function GSLLogo({ size=32 }) {
+function AppLogo({ size=32, color }) {
+  const fill = color || C.charcoal;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 1000 1000">
+      <Path d={MARK_MODULE_D} transform="rotate(0 500 500)" fill={fill}/>
+      <Path d={MARK_MODULE_D} transform="rotate(90 500 500)" fill={fill}/>
+      <Path d={MARK_MODULE_D} transform="rotate(180 500 500)" fill={fill}/>
+      <Path d={MARK_MODULE_D} transform="rotate(270 500 500)" fill={fill}/>
+    </Svg>
+  );
+}
+
+function AppLogoHero({ size=80, color }) {
+  return <AppLogo size={size} color={color}/>;
+}
+
+// ─── GSL parent-brand mark — real monogram, transparent, gold stroke only.
+// Use only for small "by Grounded Skills Lab" credit lines, never as the
+// primary in-app logo. ──────────────────────────────────────────────────────
+const GSL_MARK = require('./assets/gsl_mark.png');
+
+function GSLMark({ size=16 }) {
   return (
     <Image
-      source={GSL_LOGO}
-      style={{ width:size, height:size, borderRadius: size * 0.13 }}
+      source={GSL_MARK}
+      style={{ width:size, height:size }}
       resizeMode="contain"
     />
   );
 }
 
-function GSLLogoHero({ size=80 }) {
-  return <GSLLogo size={size}/>;
+function GSLCredit({ size=13, color, fontSize=9 }) {
+  return (
+    <View style={{ flexDirection:'row', alignItems:'center', gap:5 }}>
+      <GSLMark size={size}/>
+      <Txt style={{ fontSize, color: color || C.muted, letterSpacing:0.3 }}>by Grounded Skills Lab</Txt>
+    </View>
+  );
 }
 
 
@@ -790,93 +894,158 @@ function ScoreComparison({ roll, compact=false }) {
 }
 
 // ─── Event Log ──────────────────────────────────────────────────────────────────
-function EventLogPanel({ log=[], onDeleteEvent }) {
+// ─── Exchange grouping ───────────────────────────────────────────────────────────
+// Splits a roll's eventLog into exchanges wherever a reset closed one, mirroring
+// how the reviewed-from-video and tracked-live pathways both write resets the
+// same way. Competition rounds and pre-Reset rolls have no reset events at all,
+// in which case EventLogPanel below just falls back to a flat list.
+function getExchanges(roll) {
+  const log = (roll?.eventLog||[]).filter(e=>e.type!=='end');
+  if (!log.length) return [];
+  const sorted = [...log].sort((a,b)=>(a.ts||0)-(b.ts||0));
+  let start = roll?.videoMode==='review' ? 0 : (roll?.startedAt ?? sorted[0].ts);
+  const ex = []; let current = [];
+  sorted.forEach(e => {
+    if (e.type==='reset') { ex.push({ start, end:e.ts, items:current, open:false, endEvent:e }); current=[]; start=e.ts; }
+    else current.push(e);
+  });
+  ex.push({ start, end:sorted[sorted.length-1].ts, items:current, open:true, endEvent:null });
+  return ex;
+}
+function exchangeOutcome(ex) {
+  if (ex.open) return { text:'Ongoing', color:C.muted };
+  const r = ex.endEvent;
+  if (r?.cause==='submission') return { text:`Sub: ${r.technique} (${r.side==='me'?'you':'opp'})`, color:r.side==='me'?C.gold:C.opp };
+  return { text:'No finish', color:C.muted };
+}
+
+// ─── Event Log row pieces ────────────────────────────────────────────────────────
+function EndEventCard({ ev, fmtTs }) {
+  const isSub  = ev.item === 'submission';
+  const accent = isSub ? C.red : C.stone;
+  return (
+    <View style={{ marginVertical:8, borderWidth:1, borderColor:`${accent}55`, backgroundColor:`${accent}0D` }}>
+      <View style={{ flexDirection:'row', alignItems:'center', padding:12, gap:12 }}>
+        <View style={{ width:32, height:32, backgroundColor:accent, alignItems:'center', justifyContent:'center' }}>
+          <Txt style={{ fontSize:16 }}>{isSub ? '🔒' : '⏱'}</Txt>
+        </View>
+        <View style={{ flex:1 }}>
+          <Cap style={{ color:accent, marginBottom:3 }}>{isSub ? 'Ended by submission' : 'Ended — time expired'}</Cap>
+          {isSub && ev.submissionName ? <Txt style={{ fontSize:14, fontFamily:F.bold, color:C.text }}>{ev.submissionName}</Txt> : null}
+          {isSub && ev.submissionWinner ? (
+            <View style={{ marginTop:5, flexDirection:'row' }}>
+              <View style={{ borderWidth:1, borderColor:`${ev.submissionWinner==='me'?C.sage:C.red}55`, paddingHorizontal:7, paddingVertical:3 }}>
+                <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:ev.submissionWinner==='me'?C.sage:C.red }}>
+                  {ev.submissionWinner==='me' ? '✓ You tapped them out' : '✗ You tapped out'}
+                </Txt>
+              </View>
+            </View>
+          ) : null}
+          {!isSub && ev.duration ? <Txt style={{ fontSize:12, color:C.textDim, marginTop:3 }}>Duration: {ev.duration}</Txt> : null}
+          <Txt style={{ fontSize:9, color:C.muted, marginTop:5 }}>{fmtTs(ev)}</Txt>
+        </View>
+      </View>
+    </View>
+  );
+}
+const EVENT_TC = { submission:C.red, sweep:C.gold, position:C.sage, transition:C.blue, guardPass:C.teal, takedown:C.blue, reset:C.muted, end:C.stone };
+function EventRow({ ev, fmtTs, canSeek, onSeek, onDelete }) {
+  const sc = ev.side==='me' ? C.gold : C.stone;
+  const tc = EVENT_TC[ev.type] || C.muted;
+  const contextParts = [];
+  if (ev.fromPosition) contextParts.push(`from ${ev.fromPosition}`);
+  if (ev.toPosition)   contextParts.push(`→ ${ev.toPosition}`);
+  if (ev.guardPassed)  contextParts.push(`passed ${ev.guardPassed}`);
+  if (ev.advType)      contextParts.push(ev.advType);
+  const contextStr = contextParts.join(' · ');
+
+  return (
+    <TouchableOpacity activeOpacity={canSeek?0.6:1} onPress={()=>{ if(canSeek) onSeek(); }}
+      style={{ flexDirection:'row', alignItems:'flex-start', paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.border }}>
+      <View style={{ width:4, height:4, backgroundColor:sc, marginTop:7, marginRight:12 }}/>
+      <View style={{ flex:1 }}>
+        <View style={{ flexDirection:'row', alignItems:'center', flexWrap:'wrap' }}>
+          <Txt style={{ fontSize:13, fontFamily:F.medium }}>{ev.label||ev.item}</Txt>
+          {ev.scored && ev.pts > 0 && (
+            <View style={{ marginLeft:8, borderWidth:1, borderColor:`${sc}44`, paddingHorizontal:5, paddingVertical:1 }}>
+              <Txt style={{ fontSize:8, color:sc, fontFamily:F.semi, letterSpacing:1.5 }}>+{ev.pts} PTS</Txt>
+            </View>
+          )}
+          {ev.scored && ev.pts === 0 && (
+            <View style={{ marginLeft:8, borderWidth:1, borderColor:`${C.sand}44`, paddingHorizontal:5, paddingVertical:1 }}>
+              <Txt style={{ fontSize:8, color:C.sand, fontFamily:F.semi, letterSpacing:1.5 }}>ADV</Txt>
+            </View>
+          )}
+        </View>
+        {contextStr ? <Txt style={{ fontSize:10, color:C.teal, marginTop:3, fontFamily:F.medium }}>{contextStr}</Txt> : null}
+        <View style={{ flexDirection:'row', alignItems:'center', marginTop:4 }}>
+          <View style={{ borderWidth:1, borderColor:`${tc}33`, paddingHorizontal:4, paddingVertical:1, marginRight:8 }}>
+            <Txt style={{ fontSize:8, color:tc, letterSpacing:1.5, textTransform:'uppercase', fontFamily:F.semi }}>{ev.type}</Txt>
+          </View>
+          <Txt style={{ fontSize:10, color:C.muted }}>{ev.side==='me'?'You':ev.side==='opp'?'Opp':''} · {fmtTs(ev)}</Txt>
+          {canSeek && <Txt style={{ fontSize:10, color:C.gold, marginLeft:6 }}>▶ jump to video</Txt>}
+        </View>
+      </View>
+      {onDelete && (
+        <TouchableOpacity onPress={onDelete} style={{ padding:8 }} activeOpacity={0.7}>
+          <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+function EventLogPanel({ log=[], onDeleteEvent, roll=null, onSeek=null }) {
   if (!log.length) return <Cap style={{ textAlign:'center', marginVertical:32 }}>No events recorded</Cap>;
-  const TC = { submission:C.red, sweep:C.gold, position:C.sage, transition:C.blue, guardPass:C.teal, takedown:C.blue, end:C.stone };
+  // ev.ts means different things depending on how the roll was logged — see
+  // getVideoSeekSeconds. Format and seek accordingly rather than assuming wall-clock.
+  const fmtRawTs = ts => roll?.videoMode==='review' ? fmtClock(ts) : fmtTime(ts);
+  const fmtTs    = ev => fmtRawTs(ev.ts);
+  const seekFor  = ev => onSeek ? ()=>{ const sec=getVideoSeekSeconds(roll,ev); if(sec!=null) onSeek(sec); } : null;
+  const canSeek  = ev => !!onSeek && getVideoSeekSeconds(roll,ev)!=null;
+  const endEv    = log.find(e=>e.type==='end');
+  const hasResets= log.some(e=>e.type==='reset');
+
+  // Rolls with at least one Reset (open-mat, tracked either pathway) group into
+  // exchanges. Competition rounds and older rolls with no resets get a flat list.
+  if (hasResets) {
+    const exchanges = getExchanges(roll);
+    return (
+      <View>
+        {endEv && <EndEventCard ev={endEv} fmtTs={fmtTs}/>}
+        {[...exchanges].reverse().map((ex,idx) => {
+          const n = exchanges.length - idx;
+          const outcome = exchangeOutcome(ex);
+          const startSeekable = !!onSeek && getVideoSeekSeconds(roll,{ts:ex.start})!=null;
+          return (
+            <View key={idx} style={{ marginBottom:16 }}>
+              <TouchableOpacity activeOpacity={startSeekable?0.6:1}
+                onPress={()=>{ if(startSeekable) onSeek(getVideoSeekSeconds(roll,{ts:ex.start})); }}
+                style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:C.card, padding:10, marginBottom:2 }}>
+                <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.textDim }}>Exchange {n} · {fmtRawTs(ex.start)}–{fmtRawTs(ex.end)}</Txt>
+                <View style={{ borderWidth:1, borderColor:`${outcome.color}55`, paddingHorizontal:6, paddingVertical:2 }}>
+                  <Txt style={{ fontSize:9, fontFamily:F.semi, color:outcome.color }}>{outcome.text}</Txt>
+                </View>
+              </TouchableOpacity>
+              {!ex.items.length && <Cap style={{ padding:10 }}>No taps in this exchange</Cap>}
+              {ex.items.map((ev,i) => (
+                <EventRow key={ev.id||i} ev={ev} fmtTs={fmtTs} canSeek={canSeek(ev)} onSeek={seekFor(ev)}
+                  onDelete={onDeleteEvent?()=>onDeleteEvent(ev.id):null}/>
+              ))}
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
 
   return (
     <View>
-      {[...log].reverse().map((ev,i) => {
-        const isEnd = ev.type === 'end';
-
-        // ── Final event — special card ──────────────────────────────────────
-        if (isEnd) {
-          const isSub  = ev.item === 'submission';
-          const accent = isSub ? C.red : C.stone;
-          return (
-            <View key={ev.id||i} style={{ marginVertical:8, borderWidth:1, borderColor:`${accent}55`, backgroundColor:`${accent}0D` }}>
-              <View style={{ flexDirection:'row', alignItems:'center', padding:12, gap:12 }}>
-                <View style={{ width:32, height:32, backgroundColor:accent, alignItems:'center', justifyContent:'center' }}>
-                  <Txt style={{ fontSize:16 }}>{isSub ? '🔒' : '⏱'}</Txt>
-                </View>
-                <View style={{ flex:1 }}>
-                  <Cap style={{ color:accent, marginBottom:3 }}>{isSub ? 'Ended by submission' : 'Ended — time expired'}</Cap>
-                  {isSub && ev.submissionName ? (
-                    <Txt style={{ fontSize:14, fontFamily:F.bold, color:C.text }}>{ev.submissionName}</Txt>
-                  ) : null}
-                  {isSub && ev.submissionWinner ? (
-                    <View style={{ marginTop:5, flexDirection:'row' }}>
-                      <View style={{ borderWidth:1, borderColor:`${ev.submissionWinner==='me'?C.sage:C.red}55`, paddingHorizontal:7, paddingVertical:3 }}>
-                        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:ev.submissionWinner==='me'?C.sage:C.red }}>
-                          {ev.submissionWinner==='me' ? '✓ You tapped them out' : '✗ You tapped out'}
-                        </Txt>
-                      </View>
-                    </View>
-                  ) : null}
-                  {!isSub && ev.duration ? (
-                    <Txt style={{ fontSize:12, color:C.textDim, marginTop:3 }}>Duration: {ev.duration}</Txt>
-                  ) : null}
-                  <Txt style={{ fontSize:9, color:C.muted, marginTop:5 }}>{fmtTime(ev.ts)}</Txt>
-                </View>
-              </View>
-            </View>
-          );
-        }
-
-        // ── Regular event ──────────────────────────────────────────────────
-        const sc = ev.side==='me' ? C.gold : C.stone;
-        const tc = TC[ev.type] || C.muted;
-        // Build contextual sub-line
-        const contextParts = [];
-        if (ev.fromPosition) contextParts.push(`from ${ev.fromPosition}`);
-        if (ev.toPosition)   contextParts.push(`→ ${ev.toPosition}`);
-        if (ev.guardPassed)  contextParts.push(`passed ${ev.guardPassed}`);
-        if (ev.advType)      contextParts.push(ev.advType);
-        const contextStr = contextParts.join(' · ');
-
-        return (
-          <View key={ev.id||i} style={{ flexDirection:'row', alignItems:'flex-start', paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.border }}>
-            <View style={{ width:4, height:4, backgroundColor:sc, marginTop:7, marginRight:12 }}/>
-            <View style={{ flex:1 }}>
-              <View style={{ flexDirection:'row', alignItems:'center', flexWrap:'wrap' }}>
-                <Txt style={{ fontSize:13, fontFamily:F.medium }}>{ev.label||ev.item}</Txt>
-                {ev.scored && ev.pts > 0 && (
-                  <View style={{ marginLeft:8, borderWidth:1, borderColor:`${sc}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                    <Txt style={{ fontSize:8, color:sc, fontFamily:F.semi, letterSpacing:1.5 }}>+{ev.pts} PTS</Txt>
-                  </View>
-                )}
-                {ev.scored && ev.pts === 0 && (
-                  <View style={{ marginLeft:8, borderWidth:1, borderColor:`${C.sand}44`, paddingHorizontal:5, paddingVertical:1 }}>
-                    <Txt style={{ fontSize:8, color:C.sand, fontFamily:F.semi, letterSpacing:1.5 }}>ADV</Txt>
-                  </View>
-                )}
-              </View>
-              {contextStr ? <Txt style={{ fontSize:10, color:C.teal, marginTop:3, fontFamily:F.medium }}>{contextStr}</Txt> : null}
-              <View style={{ flexDirection:'row', marginTop:4 }}>
-                <View style={{ borderWidth:1, borderColor:`${tc}33`, paddingHorizontal:4, paddingVertical:1, marginRight:8 }}>
-                  <Txt style={{ fontSize:8, color:tc, letterSpacing:1.5, textTransform:'uppercase', fontFamily:F.semi }}>{ev.type}</Txt>
-                </View>
-                <Txt style={{ fontSize:10, color:C.muted }}>{ev.side==='me'?'You':'Opp'} · {fmtTime(ev.ts)}</Txt>
-              </View>
-            </View>
-            {onDeleteEvent && (
-              <TouchableOpacity onPress={()=>onDeleteEvent(ev.id)} style={{ padding:8 }} activeOpacity={0.7}>
-                <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
-              </TouchableOpacity>
-            )}
-          </View>
-        );
-      })}
+      {[...log].reverse().map((ev,i) => ev.type==='end'
+        ? <EndEventCard key={ev.id||i} ev={ev} fmtTs={fmtTs}/>
+        : <EventRow key={ev.id||i} ev={ev} fmtTs={fmtTs} canSeek={canSeek(ev)} onSeek={seekFor(ev)}
+            onDelete={onDeleteEvent?()=>onDeleteEvent(ev.id):null}/>
+      )}
     </View>
   );
 }
@@ -1149,6 +1318,119 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
 
 
 
+// ─── Reset Sheet (Modal bottom sheet) ───────────────────────────────────────────
+// Marks the boundary between exchanges in an open-mat roll. A submission almost
+// always ends the exchange, not the whole roll, so Reset asks how it ended rather
+// than assuming — same three-step flow whether logged live or reconstructed later
+// from video, so the eventLog shape matches either way.
+const RESET_STEP_HEADERS = { cause:'How did it end?', side:'Who submitted?', technique:'Which submission?' };
+
+function ResetSheet({ visible, onClose, onConfirm, submissions=[], allTechniques=[] }) {
+  const [step,       setStep]       = useState('cause');
+  const [side,       setSide]       = useState(null);
+  const [customVal,  setCustomVal]  = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+  const scrollRef = useRef(null);
+  const inputRef  = useRef(null);
+  const ac = side==='opp' ? C.opp : C.gold;
+
+  const reset = () => { setStep('cause'); setSide(null); setCustomVal(''); setShowCustom(false); };
+  const close = () => { onClose(); reset(); };
+
+  const openCustom = () => {
+    setShowCustom(true); setCustomVal('');
+    setTimeout(() => { inputRef.current?.focus(); scrollRef.current?.scrollToEnd({ animated:true }); }, 80);
+  };
+
+  const finishPlain      = () => { onConfirm({ cause:'plain' }); close(); };
+  const finishSubmission = technique => { onConfirm({ cause:'submission', side, technique }); close(); };
+
+  const canGoBack = step !== 'cause';
+  const handleBack = () => {
+    if (step==='technique') setStep('side');
+    else if (step==='side')  { setStep('cause'); setSide(null); }
+    setShowCustom(false); setCustomVal('');
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
+      <View style={{ flex:1, justifyContent:'flex-end', backgroundColor:'rgba(10,10,8,0.8)' }}>
+        {!showCustom
+          ? <TouchableOpacity style={{ flex:1 }} activeOpacity={1} onPress={close}/>
+          : <View style={{ flex:1 }}/>
+        }
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} keyboardVerticalOffset={0}>
+          <View style={{ backgroundColor:C.surface, borderTopWidth:1, borderTopColor:C.borderMid,
+            paddingTop:20, paddingHorizontal:16, paddingBottom:Platform.OS==='ios'?36:16, maxHeight:'90%' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <View style={{ flexDirection:'row', alignItems:'center' }}>
+                {canGoBack && (
+                  <TouchableOpacity onPress={handleBack} style={{ marginRight:12, padding:4 }} activeOpacity={0.7}>
+                    <Txt style={{ fontSize:20, color:C.muted }}>←</Txt>
+                  </TouchableOpacity>
+                )}
+                <View>
+                  <Cap style={{ marginBottom:2 }}>Reset</Cap>
+                  <Txt style={{ fontSize:14, fontFamily:F.semi }}>{RESET_STEP_HEADERS[step]}</Txt>
+                </View>
+              </View>
+              <TouchableOpacity onPress={close}
+                style={{ width:32, height:32, borderWidth:1, borderColor:C.border, alignItems:'center', justifyContent:'center' }}
+                activeOpacity={0.7}>
+                <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
+              </TouchableOpacity>
+            </View>
+
+            {step==='cause' && (
+              <View>
+                <TouchableOpacity onPress={()=>setStep('side')} activeOpacity={0.75}
+                  style={{ padding:14, marginBottom:8, borderWidth:1, borderColor:C.border }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi }}>Submission</Txt>
+                  <Cap style={{ marginTop:2, fontSize:8 }}>Ends this exchange, roll continues</Cap>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={finishPlain} activeOpacity={0.75}
+                  style={{ padding:14, borderWidth:1, borderColor:C.border }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi }}>No finish / reset</Txt>
+                  <Cap style={{ marginTop:2, fontSize:8 }}>Scrambled back to neutral</Cap>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {step==='side' && (
+              <View>
+                <TouchableOpacity onPress={()=>{ setSide('me'); setStep('technique'); }} activeOpacity={0.75}
+                  style={{ padding:14, marginBottom:8, borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.gold }}>You</Txt>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={()=>{ setSide('opp'); setStep('technique'); }} activeOpacity={0.75}
+                  style={{ padding:14, borderWidth:1, borderColor:`${C.opp}55`, backgroundColor:C.oppSoft }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.opp }}>Opponent</Txt>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {step==='technique' && (
+              <OptionList
+                items={submissions} showPts={false}
+                showCustom={showCustom} customVal={customVal}
+                onCustomChange={setCustomVal}
+                onOpenCustom={openCustom}
+                onCloseCustom={()=>{ setShowCustom(false); setCustomVal(''); }}
+                onCustomSubmit={()=>{ if(customVal.trim()) finishSubmission(customVal.trim()); }}
+                onPick={finishSubmission}
+                inputRef={inputRef} scrollRef={scrollRef} allTechniques={allTechniques}
+                accent={ac}
+              />
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+
+
 // ─── Counter Card ────────────────────────────────────────────────────────────────
 function CounterCard({ item, count, onAdd, onRemove, disabled, ac=C.gold }) {
   return (
@@ -1193,65 +1475,36 @@ function PauseButton({ isPaused, onToggle, small=false }) {
   );
 }
 
-// ─── Position Timer Panel ────────────────────────────────────────────────────────
-function PositionTimerPanel({ positions, durations, posCounts, onRecord, onAddPos, isPaused, isOpp }) {
-  const [active, setActive]       = useState(null);
-  const [liveElapsed, setLiveEl]  = useState(0);
-  const [custom, setCustom]       = useState('');
-  const [customSec, setCustomSec] = useState('');
-  const startRef = useRef(null);
-  const ivRef    = useRef(null);
-  const ac       = isOpp ? C.opp : C.gold;
-
-  useEffect(() => {
-    if (isPaused && active) {
-      clearInterval(ivRef.current);
-      const sp = Math.round((Date.now()-startRef.current)/1000);
-      if(sp>0) onRecord(active,sp,false);
-      setActive(null); setLiveEl(0);
-    }
-  }, [isPaused]);
-  useEffect(() => () => clearInterval(ivRef.current), []);
-
-  const start = pos => {
-    if (isPaused) return;
-    if (active) { clearInterval(ivRef.current); onRecord(active, Math.round((Date.now()-startRef.current)/1000), false); }
-    if (active===pos) { setActive(null); setLiveEl(0); return; }
-    onRecord(pos,0,true); setActive(pos); setLiveEl(0); startRef.current=Date.now();
-    ivRef.current = setInterval(() => setLiveEl(Math.round((Date.now()-startRef.current)/1000)), 500);
-  };
-
-  const sorted = [...positions].sort((a,b)=>(durations[b]||0)-(durations[a]||0));
+// ─── Position Count Panel ────────────────────────────────────────────────────────
+// Positions are logged as a single tap, same as Submissions/Sweeps — no duration is
+// tracked. A position's point value (Mount/Back Control/Knee on Belly) still shows
+// as a badge via getPosPtsKey, it just isn't tied to how long you held it.
+function PositionCountPanel({ positions, posCounts, onAdd, onRemove, onAddPos, disabled, ac }) {
+  const [custom, setCustom] = useState('');
+  const sorted = [...positions].sort((a,b)=>(posCounts[b]||0)-(posCounts[a]||0));
 
   return (
-    <View style={{ opacity:isPaused?0.4:1 }}>
-      <Cap style={{ marginBottom:12 }}>Tap to start · tap again to stop</Cap>
-      <View style={{ flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:16 }}>
-        {sorted.map(pos => {
-          const isOn = active===pos;
-          const pk   = getPosPtsKey(pos);
-          const pv   = pk ? SCORE_EVENTS[pk]?.pts||0 : 0;
-          const pc   = pk ? SCORE_EVENTS[pk]?.color||null : null;
-          const entries = posCounts[pos]||0;
-          return (
-            <TouchableOpacity key={pos} onPress={()=>start(pos)} activeOpacity={0.75}
-              style={{ backgroundColor:isOn?ac:'transparent', borderWidth:1, borderColor:isOn?ac:(pc||C.border), padding:12 }}>
-              <Txt style={{ fontSize:10, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:isOn?'#0F0F0D':C.text }}>
-                {isOn?'◼ ':'▶ '}{pos}
-                {pv>0&&!isOn&&<Txt style={{ fontSize:8, color:pc, fontFamily:F.semi }}> +{pv}PTS</Txt>}
-              </Txt>
-              <Txt style={{ fontSize:9, color:isOn?'#0F0F0D':C.muted, marginTop:3 }}>
-                {isOn ? `◉ ${fmtSecs(liveElapsed)}` : `${fmtSecs(durations[pos]||0)}${entries>0?` · ${entries}×`:''}`}
-              </Txt>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+    <View>
+      <Cap style={{ color:disabled?C.amber:ac, marginBottom:12 }}>{disabled?'Paused':'Tap + to record'}</Cap>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:12 }}>
+        <View style={{ flexDirection:'row', gap:8 }}>
+          {sorted.map(pos => {
+            const pk = getPosPtsKey(pos);
+            const pv = pk ? SCORE_EVENTS[pk]?.pts||0 : 0;
+            return (
+              <View key={pos} style={{ alignItems:'center', gap:3 }}>
+                <CounterCard item={pos} count={posCounts[pos]||0} onAdd={onAdd} onRemove={onRemove} disabled={disabled} ac={ac}/>
+                {pv>0 && <Cap style={{ fontSize:7, color:ac }}>+{pv} PTS</Cap>}
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
       <View style={{ flexDirection:'row', gap:8 }}>
-        <TextInput value={custom} onChangeText={setCustom} placeholder="New position…" placeholderTextColor={C.muted} style={[s.input, { flex:1 }]}/>
-        <TextInput value={customSec} onChangeText={setCustomSec} placeholder="Sec" keyboardType="numeric" style={[s.input, { width:60 }]}/>
-        <TouchableOpacity onPress={()=>{ if(custom.trim()){ onAddPos(custom.trim(),parseInt(customSec)||0); setCustom(''); setCustomSec(''); }}} activeOpacity={0.75} style={[s.btnGhost, { paddingHorizontal:14 }]}>
-          <Txt style={[s.btnText, { color:C.muted }]}>Add</Txt>
+        <TextInput value={custom} onChangeText={setCustom} placeholder="Add custom position…" placeholderTextColor={C.muted} returnKeyType="done"
+          onSubmitEditing={()=>{ if(custom.trim()&&!disabled){ onAddPos(custom.trim()); setCustom(''); }}} style={[s.input,{flex:1}]}/>
+        <TouchableOpacity onPress={()=>{ if(custom.trim()&&!disabled){ onAddPos(custom.trim()); setCustom(''); }}} activeOpacity={0.75} style={[s.btnGhost,{paddingHorizontal:14}]}>
+          <Txt style={[s.btnText,{color:C.muted}]}>Add</Txt>
         </TouchableOpacity>
       </View>
     </View>
@@ -1259,22 +1512,171 @@ function PositionTimerPanel({ positions, durations, posCounts, onRecord, onAddPo
 }
 
 // ─── Roll Tracking Panel ─────────────────────────────────────────────────────────
+// ─── Inline Video Player ────────────────────────────────────────────────────────
+// Plays a local camera-roll file or a direct video URL natively, with an
+// imperative handle so callers can read the exact playhead (for timestamping
+// taps in review mode) or seek to a stored timestamp (for "jump to this moment").
+// Not for YouTube or share-page links — those aren't raw decodable streams; see
+// VideoAttachRow for how those fall back to open-externally instead.
+const InlineVideoPlayer = React.forwardRef(function InlineVideoPlayer({ uri }, ref) {
+  const videoRef = useRef(null);
+  const posRef    = useRef(0);
+  const [status, setStatus] = useState({});
+
+  React.useImperativeHandle(ref, () => ({
+    getPositionSeconds: () => posRef.current,
+    seekTo: async seconds => { try { await videoRef.current?.setPositionAsync(Math.max(0,Math.round(seconds*1000))); } catch(e) {} },
+  }));
+
+  const onUpdate = st => {
+    setStatus(st);
+    if (st.isLoaded && typeof st.positionMillis==='number') posRef.current = st.positionMillis/1000;
+  };
+
+  const durSec = status.isLoaded && status.durationMillis ? status.durationMillis/1000 : 0;
+  const posSec = status.isLoaded && status.positionMillis ? status.positionMillis/1000 : 0;
+  const pct    = durSec>0 ? Math.min(100,(posSec/durSec)*100) : 0;
+
+  return (
+    <View style={{ backgroundColor:'#000', borderRadius:10, overflow:'hidden', marginBottom:14 }}>
+      <Video ref={videoRef} source={{ uri }} style={{ width:'100%', aspectRatio:16/9 }}
+        resizeMode={ResizeMode.CONTAIN} useNativeControls={false}
+        onPlaybackStatusUpdate={onUpdate} progressUpdateIntervalMillis={200}/>
+      <View style={{ padding:10 }}>
+        <View style={{ height:3, backgroundColor:'#ffffff33', borderRadius:2, marginBottom:8 }}>
+          <View style={{ height:'100%', width:`${pct}%`, backgroundColor:C.gold, borderRadius:2 }}/>
+        </View>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
+          <TouchableOpacity onPress={()=> status.isPlaying ? videoRef.current?.pauseAsync() : videoRef.current?.playAsync()} activeOpacity={0.75}
+            style={{ width:34, height:34, borderRadius:17, backgroundColor:C.goldDim, alignItems:'center', justifyContent:'center' }}>
+            <Txt style={{ color:C.gold, fontSize:13 }}>{status.isPlaying?'❚❚':'▶'}</Txt>
+          </TouchableOpacity>
+          <Txt style={{ fontSize:11, color:'#EDE9DFcc' }}>{fmtClock(posSec)} / {fmtClock(durSec)}</Txt>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+// ─── Manual Time Entry (fallback player) ────────────────────────────────────────
+// For links that can't be played inline — Drive/Dropbox/iCloud share pages, or
+// YouTube on native (only embeds on web today). The athlete watches externally
+// and keeps this field roughly in sync by eye; getTs reads whatever's typed here
+// instead of an automatic playhead. Precision suffers, but the pathway still works.
+function ManualTimeEntry({ url, seconds, onChangeSeconds }) {
+  const [text, setText] = useState(fmtClock(seconds));
+  const openUrl = () => { if (typeof window!=='undefined') window.open(url,'_blank'); else Linking.openURL(url).catch(()=>{}); };
+  const commit = v => {
+    setText(v);
+    const m = v.trim().match(/^(\d+):(\d{1,2})$/);
+    if (m) onChangeSeconds(parseInt(m[1],10)*60+parseInt(m[2],10));
+    else if (/^\d+$/.test(v.trim())) onChangeSeconds(parseInt(v.trim(),10));
+  };
+  return (
+    <View style={{ borderWidth:1, borderColor:C.border, padding:12, marginBottom:14 }}>
+      <Cap style={{ marginBottom:8 }}>This link can't play inline — watch it externally, type the time you see</Cap>
+      <View style={{ flexDirection:'row', gap:8 }}>
+        <TouchableOpacity onPress={openUrl} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:12 }]}>
+          <Txt style={[s.btnText,{ color:C.muted }]}>↗ Open video</Txt>
+        </TouchableOpacity>
+        <TextInput value={text} onChangeText={commit} placeholder="m:ss" placeholderTextColor={C.muted}
+          keyboardType={Platform.OS==='web'?'default':'numbers-and-punctuation'} style={[s.input,{ width:80, textAlign:'center' }]}/>
+      </View>
+    </View>
+  );
+}
+
+// ─── Video Attach Row ───────────────────────────────────────────────────────────
+// Points a roll at a video however the athlete already has it — camera roll or a
+// pasted link to wherever they store their own footage. The app never uploads or
+// hosts the bytes, only ever a URL/local-file reference.
+function VideoAttachRow({ videoUrl, onAttach, onClear, disabled }) {
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteVal,  setPasteVal]  = useState('');
+
+  const pickFromLibrary = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo library access to attach a video.'); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos, quality:1 });
+    if (!res.canceled && res.assets?.[0]?.uri) onAttach(res.assets[0].uri);
+  };
+
+  if (videoUrl) {
+    const isLocal = videoUrl.startsWith('file://')||videoUrl.startsWith('ph://')||videoUrl.startsWith('content://');
+    return (
+      <View style={{ flexDirection:'row', alignItems:'center', borderWidth:1, borderColor:C.border, padding:10, marginBottom:14 }}>
+        <Txt style={{ fontSize:15, marginRight:10 }}>🎥</Txt>
+        <Txt style={{ flex:1, fontSize:11, color:C.textDim }} numberOfLines={1}>{isLocal?'Video from camera roll':videoUrl}</Txt>
+        <TouchableOpacity onPress={onClear} disabled={disabled} activeOpacity={0.7} style={{ padding:6 }}>
+          <Cap style={{ color:C.muted }}>Remove</Cap>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginBottom:14 }}>
+      {!showPaste ? (
+        <View style={{ flexDirection:'row', gap:8 }}>
+          <TouchableOpacity onPress={pickFromLibrary} disabled={disabled} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:12 }]}>
+            <Txt style={[s.btnText,{ color:C.muted }]}>📷 Camera roll</Txt>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={()=>setShowPaste(true)} disabled={disabled} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:12 }]}>
+            <Txt style={[s.btnText,{ color:C.muted }]}>🔗 Paste link</Txt>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={{ flexDirection:'row', gap:8 }}>
+          <TextInput value={pasteVal} onChangeText={setPasteVal} placeholder="Paste video link…" placeholderTextColor={C.muted}
+            autoCapitalize="none" autoCorrect={false} style={[s.input,{ flex:1 }]}/>
+          <TouchableOpacity onPress={()=>{ if(pasteVal.trim()){ onAttach(pasteVal.trim()); setPasteVal(''); setShowPaste(false); } }} activeOpacity={0.75}
+            style={[s.btnGhost,{ paddingHorizontal:14 }]}>
+            <Txt style={[s.btnText,{ color:C.muted }]}>Add</Txt>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, transitions, guardPulls, takedowns, setSubmissions, setSweeps, setPositions, setTransitions, setGuardPulls, setTakedowns }) {
   const SUBTABS = ['Score','Submissions','Sweeps','Guard Pass','Transitions','Positions','Event Log'];
   const [subTab, setSubTab]         = useState('Score');
   const [trackingOpp, setTracking]  = useState(false);
   const [scoreSheet, setScoreSheet] = useState(null); // 'me'|'opp'|null
+  const [showReset,  setShowReset]  = useState(false);
   const [customSubInput, setCSI]    = useState('');
   const [customSwpInput, setCSW]    = useState('');
+  const [manualSeconds, setManualSeconds] = useState(0); // fallback "current time" for links that can't play inline
+  const playerRef = useRef(null);
 
-  const isPaused = !!roll.paused;
-  const side     = trackingOpp ? 'opp' : 'me';
-  const pf       = field => trackingOpp ? `opp_${field}` : field;
-  const ac       = trackingOpp ? C.opp : C.gold;
+  const isPaused   = !!roll.paused;
+  const side       = trackingOpp ? 'opp' : 'me';
+  const pf         = field => trackingOpp ? `opp_${field}` : field;
+  const ac         = trackingOpp ? C.opp : C.gold;
+  const isDirectVid= isDirectVideoSource(roll.videoUrl);
+  const ytId       = roll.videoUrl ? getYouTubeId(roll.videoUrl) : null;
+
+  // Every tap gets timestamped the same way, whether that's the wall clock (live,
+  // with or without a video filming alongside) or the video's own playhead
+  // (reviewing footage with no live session behind it — see getVideoSeekSeconds
+  // for how these two shapes get converted back to a seek position later).
+  const getTs = () => {
+    if (roll.videoMode==='review') return isDirectVid ? (playerRef.current?.getPositionSeconds() ?? manualSeconds) : manualSeconds;
+    return Date.now();
+  };
+
+  const attachVideo = url => onMutate(r => ({ ...r, videoUrl:url, videoMode:null, videoSyncOffset:null }));
+  const clearVideo   = () => onMutate(r => ({ ...r, videoUrl:null, videoMode:null, videoSyncOffset:null }));
+  const setVideoMode = mode => onMutate(r => ({ ...r, videoMode:mode }));
+  const syncVideo     = () => {
+    const offset = isDirectVid ? (playerRef.current?.getPositionSeconds() ?? 0) : manualSeconds;
+    onMutate(r => ({ ...r, videoSyncOffset:offset }));
+  };
 
   const logEvent = (type,item,label,scoreKey=null) => {
     const se = scoreKey ? SCORE_EVENTS[scoreKey] : null;
-    const ev = { id:uid(), ts:Date.now(), side, type, item, label:label||(se?.label)||item, scoreKey, scored:!!scoreKey, pts:se?.pts||0 };
+    const ev = { id:uid(), ts:getTs(), side, type, item, label:label||(se?.label)||item, scoreKey, scored:!!scoreKey, pts:se?.pts||0 };
     onMutate(r => ({ ...r, eventLog:[...(r.eventLog||[]),ev] }));
   };
 
@@ -1285,18 +1687,28 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   const addSwp  = item => { if(isPaused)return; addCount('sweepCounts',item); logEvent('sweep',item,item,'sweep'); };
   const addGP   = item => { if(isPaused)return; addCount('guardPassCounts',item); logEvent('guardPass',item,item,'guardPass'); };
   const addTrans= item => { if(isPaused)return; const isTd=takedowns.includes(item); addCount('transCounts',item); logEvent('transition',item,item,isTd?'takedown':null); };
-  const recPos  = (pos,secs,countEntry=false) => {
-    onMutate(r => {
-      const dk=pf('posDurations'), ck=pf('posCounts');
-      const nd=secs>0?{...r[dk],[pos]:(r[dk][pos]||0)+secs}:r[dk];
-      const nc=countEntry?{...r[ck],[pos]:(r[ck][pos]||0)+1}:r[ck];
-      if(countEntry){ const sk=getPosPtsKey(pos); logEvent('position',pos,pos,sk||null); }
-      return { ...r, [dk]:nd, [ck]:nc };
-    });
-  };
-  const addNewPos=(pos,secs)=>{ if(!positions.includes(pos)) setPositions(ps=>[...ps,pos]); if(secs>0) recPos(pos,secs,true); };
+  const addPos  = item => { if(isPaused)return; addCount('posCounts',item); const sk=getPosPtsKey(item); logEvent('position',item,item,sk||null); };
+  const addCustomPos=(n)=>{ if(!positions.includes(n)) setPositions(ps=>[...ps,n]); addPos(n); };
   const addCustomSub=(n)=>{ if(!submissions.includes(n)) setSubmissions(ss=>[...ss,n]); addSub(n); };
   const addCustomSwp=(n)=>{ if(!sweeps.includes(n)) setSweeps(sw=>[...sw,n]); addSwp(n); };
+  const confirmReset = ({ cause, side:subSide, technique }) => {
+    if (isPaused) return;
+    if (cause==='submission' && technique) {
+      const pfx = subSide==='opp' ? 'opp_' : '';
+      onMutate(r => {
+        const key   = `${pfx}subCounts`;
+        const subEv = { id:uid(), ts:getTs(), side:subSide, type:'submission', item:technique, label:technique, scoreKey:null, scored:false, pts:0 };
+        const rstEv = { id:uid(), ts:getTs(), side:subSide, type:'reset', cause:'submission', technique, label:`Reset — submission: ${technique} (${subSide==='me'?'you':'opp'})`, scoreKey:null, scored:false, pts:0 };
+        return { ...r, [key]:{ ...r[key], [technique]:(r[key][technique]||0)+1 }, eventLog:[...(r.eventLog||[]),subEv,rstEv] };
+      });
+      if (!submissions.includes(technique)) setSubmissions(ss=>[...ss,technique]);
+    } else {
+      onMutate(r => {
+        const rstEv = { id:uid(), ts:getTs(), side:null, type:'reset', cause:'plain', technique:null, label:'Reset', scoreKey:null, scored:false, pts:0 };
+        return { ...r, eventLog:[...(r.eventLog||[]),rstEv] };
+      });
+    }
+  };
   const addCustomTrans=(n,type)=>{
     if(!transitions.includes(n)) setTransitions(t=>[...t,n]);
     if(type==='Guard Pull'&&!guardPulls.includes(n)) setGuardPulls(g=>[...g,n]);
@@ -1328,7 +1740,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
     };
 
     const ev = {
-      id:uid(), ts:Date.now(), side:s,
+      id:uid(), ts:getTs(), side:s,
       type: se.category,
       item: context.technique || context.advType || context.toPosition || se.label,
       label: buildLabel(),
@@ -1387,7 +1799,6 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   const oppPts = (roll.eventLog||[]).filter(e=>e.side==='opp'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
   const ac_sub = trackingOpp?roll.opp_subCounts||{}:roll.subCounts||{};
   const aw     = trackingOpp?roll.opp_sweepCounts||{}:roll.sweepCounts||{};
-  const ap     = trackingOpp?roll.opp_posDurations||{}:roll.posDurations||{};
   const ak     = trackingOpp?roll.opp_posCounts||{}:roll.posCounts||{};
   const at     = trackingOpp?roll.opp_transCounts||{}:roll.transCounts||{};
   const agp    = trackingOpp?roll.opp_guardPassCounts||{}:roll.guardPassCounts||{};
@@ -1396,6 +1807,39 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
 
   return (
     <View>
+      {/* Video — attach, then either play inline or fall back to manual time entry */}
+      <VideoAttachRow videoUrl={roll.videoUrl} onAttach={attachVideo} onClear={clearVideo} disabled={isPaused}/>
+      {roll.videoUrl && (
+        isDirectVid
+          ? <InlineVideoPlayer ref={playerRef} uri={roll.videoUrl}/>
+          : <ManualTimeEntry url={roll.videoUrl} seconds={manualSeconds} onChangeSeconds={setManualSeconds}/>
+      )}
+      {roll.videoUrl && ytId && !isDirectVid && (
+        <View style={{ marginBottom:14, marginTop:-6 }}><TechVideoRef url={roll.videoUrl}/></View>
+      )}
+      {roll.videoUrl && !roll.videoMode && (
+        <View style={{ borderWidth:1, borderColor:C.border, padding:12, marginBottom:14 }}>
+          <Cap style={{ marginBottom:8 }}>How is this video being used?</Cap>
+          <View style={{ flexDirection:'row', gap:8 }}>
+            <TouchableOpacity onPress={()=>setVideoMode('live')} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:10 }]}>
+              <Txt style={[s.btnText,{ color:C.muted, fontSize:9 }]}>Filmed live — tracking as I go</Txt>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={()=>setVideoMode('review')} activeOpacity={0.75} style={[s.btnGhost,{ flex:1, paddingVertical:10 }]}>
+              <Txt style={[s.btnText,{ color:C.muted, fontSize:9 }]}>Logging this roll from the video now</Txt>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      {roll.videoUrl && roll.videoMode==='live' && roll.videoSyncOffset==null && (
+        <TouchableOpacity onPress={syncVideo} activeOpacity={0.75}
+          style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, padding:12, marginBottom:14, alignItems:'center' }}>
+          <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.gold, textAlign:'center' }}>⏱ Scrub to when the roll started, then tap here to sync</Txt>
+        </TouchableOpacity>
+      )}
+      {roll.videoUrl && roll.videoMode==='live' && roll.videoSyncOffset!=null && (
+        <View style={{ marginBottom:14 }}><Cap style={{ color:C.sage }}>✓ Synced — timestamps line up with this video</Cap></View>
+      )}
+
       {/* Score bar */}
       <View style={{ flexDirection:'row', gap:4, marginBottom:14 }}>
         <TouchableOpacity onPress={()=>setScoreSheet('me')} activeOpacity={0.75}
@@ -1414,6 +1858,11 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
           <Cap style={{ color:C.stone, fontSize:7 }}>Score</Cap>
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity onPress={()=>!isPaused&&setShowReset(true)} activeOpacity={0.75} disabled={isPaused}
+        style={{ borderWidth:1, borderColor:C.border, paddingVertical:10, alignItems:'center', marginBottom:14, opacity:isPaused?0.4:1 }}>
+        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.muted }}>↺ Reset — exchange ended</Txt>
+      </TouchableOpacity>
 
       <ScoreComparison roll={roll}/>
       <View style={{ height:18 }}/>
@@ -1503,14 +1952,20 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
       )}
 
       {subTab==='Positions' && (
-        <PositionTimerPanel positions={positions} durations={ap} posCounts={ak} onRecord={recPos} onAddPos={addNewPos} isPaused={isPaused} isOpp={trackingOpp}/>
+        <PositionCountPanel positions={positions} posCounts={ak} onAdd={addPos} onRemove={i=>remCount('posCounts',i)} onAddPos={addCustomPos} disabled={disabled} ac={ac}/>
       )}
 
-      {subTab==='Event Log' && <EventLogPanel log={roll.eventLog||[]} onDeleteEvent={deleteEvent}/>}
+      {subTab==='Event Log' && (
+        <EventLogPanel log={roll.eventLog||[]} onDeleteEvent={deleteEvent} roll={roll}
+          onSeek={roll.videoUrl ? (isDirectVid ? sec=>playerRef.current?.seekTo(sec) : setManualSeconds) : null}/>
+      )}
 
       <QuickScoreSheet visible={scoreSheet!==null} isOpp={scoreSheet==='opp'} onClose={()=>setScoreSheet(null)}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}
         onRecord={(key,context)=>{ quickScore(scoreSheet==='opp',key,context||{}); setScoreSheet(null); }}/>
+      <ResetSheet visible={showReset} onClose={()=>setShowReset(false)}
+        onConfirm={confirmReset} submissions={submissions}
+        allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}/>
     </View>
   );
 }
@@ -1523,7 +1978,7 @@ function StartRollModal({ visible, onStart, onCancel }) {
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
         <View style={{ flex:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:380, padding:24 }}>
-            <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
+            <Cap style={{ marginBottom:4 }}>MatAnalyst</Cap>
             <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>Start New Roll</Txt>
             <FieldInput label="Partner Name (Optional)" value={partner} onChangeText={setPartner} placeholder="Training partner…"/>
             <View style={{ flexDirection:'row', gap:8, marginTop:8 }}>
@@ -1564,7 +2019,7 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
         <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
-            <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
+            <Cap style={{ marginBottom:4 }}>MatAnalyst</Cap>
             <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>How did it end?</Txt>
             <View style={{ flexDirection:'row', gap:8, marginBottom:20 }}>
               <ETBtn type="time" icon="⏱" label="Time Expired" desc="Match ended on the clock"/>
@@ -1651,7 +2106,6 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
 function RollCard({ roll, index, onView, onDelete, confirm }) {
   const myPts  = (roll.eventLog||[]).filter(e=>e.side==='me'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
   const oppPts = (roll.eventLog||[]).filter(e=>e.side==='opp'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
-  const totalPos = Object.values(roll.posDurations||{}).reduce((a,b)=>a+b,0);
   const res = roll.rollResult ? (roll.rollResult==='win'?'W':roll.rollResult==='loss'?'L':'D') : (myPts>oppPts?'W':myPts<oppPts?'L':'T');
   const rc  = res==='W'?C.sage:res==='L'?C.red:C.amber;
   const isSub = roll.endType==='submission';
@@ -1684,7 +2138,6 @@ function RollCard({ roll, index, onView, onDelete, confirm }) {
           </View>
         </View>
         <View style={{ flexDirection:'row', marginTop:10, alignItems:'center' }}>
-          {totalPos>0 && <Txt style={{ fontSize:12, color:C.textDim, marginRight:14 }}>{fmtSecs(totalPos)} <Cap style={{ fontSize:8 }}>mat</Cap></Txt>}
           {isSub && <View style={{ borderWidth:1, borderColor:`${C.red}55`, paddingHorizontal:7, paddingVertical:3, marginRight:6, borderRadius:4 }}>
             <Txt style={{ fontSize:10, fontFamily:F.semi, color:C.red }}>🔒 {roll.submissionName||'SUB'}</Txt>
           </View>}
@@ -1705,7 +2158,7 @@ function RollCard({ roll, index, onView, onDelete, confirm }) {
 function CompetitionsList({ comps, onSelect, onNew }) {
   if (!comps.length) return (
     <View style={{ alignItems:'center', paddingVertical:60 }}>
-      <GSLLogo size={56}/>
+      <AppLogo size={56}/>
       <View style={{ width:30, height:1, backgroundColor:C.gold, marginTop:16, marginBottom:16 }}/>
       <Cap style={{ marginBottom:20 }}>No competitions recorded</Cap>
       <Btn label="Record Competition" onPress={onNew} style={{ paddingHorizontal:28 }}/>
@@ -1776,9 +2229,9 @@ function ProfileScreen({ profiles, activeProfileId, onSelect, onNew, onEdit, onD
     <View style={{ flex:1, backgroundColor:C.bg, paddingTop: TOP_INSET }}>
       <View style={{ backgroundColor:C.surface, borderBottomWidth:1, borderBottomColor:C.border, padding:20 }}>
         <View style={{ flexDirection:'row', alignItems:'center', gap:14 }}>
-          <GSLLogo size={44}/>
+          <AppLogo size={44}/>
           <View>
-            <Txt style={{ fontSize:11, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.text, lineHeight:15 }}>Grounded Skills Lab</Txt>
+            <Txt style={{ fontSize:11, fontFamily:F.display, letterSpacing:1, color:C.text, lineHeight:15 }}>Mat<Txt style={{ fontFamily:F.display, color:C.gold }}>Analyst</Txt></Txt>
             <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginTop:4 }}>
               <View style={{ width:16, height:1, backgroundColor:C.gold }}/>
               <Cap style={{ fontSize:7, color:C.gold, letterSpacing:2 }}>Select Profile</Cap>
@@ -1825,8 +2278,8 @@ function ProfileScreen({ profiles, activeProfileId, onSelect, onNew, onEdit, onD
           <Cap style={{ letterSpacing:2.5 }}>New Profile</Cap>
         </TouchableOpacity>
         <View style={{ alignItems:'center', gap:10 }}>
-          <GSLLogo size={32}/>
-          <Cap style={{ textAlign:'center', color:C.border, marginTop:4 }}>Train. Measure. Improve. Repeat.</Cap>
+          <AppLogo size={32}/>
+          <Cap style={{ textAlign:'center', color:C.border, marginTop:4 }}>A smarter way to analyze your game.</Cap>
         </View>
       </ScrollView>
 
@@ -2100,7 +2553,7 @@ function CompModal({ visible, initial, onSave, onCancel }) {
       <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
         <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
           <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
-            <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
+            <Cap style={{ marginBottom:4 }}>MatAnalyst</Cap>
             <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>{initial?'Edit Competition':'New Competition'}</Txt>
 
             <FieldInput label="Competition Name *" value={name} onChangeText={setName} placeholder="e.g. IBJJF Pan Championship"/>
@@ -2174,6 +2627,385 @@ function CompModal({ visible, initial, onSave, onCancel }) {
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+// ─── Targets — config, generation logic, screen ─────────────────────────────────
+// A "target" challenges the athlete to land a technique (single) or a linked
+// opener → advance → finish sequence (chain) that was either taught in class
+// but never tested live, or already proven live and worth chaining together.
+// Outcome per step is manual for now (Landed / Attempted / No) — auto-detection
+// from the live roll event log is a planned v2.
+const TARGET_STEP_CFG = {
+  submission: { label:'Submission', color:C.red,  icon:'🔒' },
+  sweep:      { label:'Sweep',      color:C.gold, icon:'↺' },
+  takedown:   { label:'Takedown',   color:C.blue, icon:'↓' },
+  guardPass:  { label:'Guard Pass', color:C.teal, icon:'→' },
+  guardPull:  { label:'Guard Pull', color:C.sage, icon:'⬇' },
+};
+const TARGET_OUTCOMES = [
+  { key:'landed',    label:'Landed',    color:'#1D9E75', bg:'#E1F5EE' },
+  { key:'attempted', label:'Attempted', color:'#BA7517', bg:'#FAEEDA' },
+  { key:'no',        label:'No',        color:'#993C1D', bg:'#FAECE7' },
+];
+
+// ── Position taxonomy ────────────────────────────────────────────────────────
+// Reuses the app's own DEF_POS list as the canonical position vocabulary
+// (same names already used for position-timer tracking elsewhere). Maps each
+// *default* technique to where it starts/ends so chains actually flow —
+// entry lands somewhere → advance must plausibly start there → finish must
+// be a submission that's actually live from wherever the advance landed.
+// Custom (user-added) techniques have no entry here and are treated as
+// position-agnostic — they're allowed anywhere rather than excluded, since
+// we have no data to constrain them by.
+const TECH_POSITIONS = {
+  takedown: {
+    'Double Leg':'Side Control', 'Single Leg':'Side Control', 'Ankle Pick':'Side Control',
+    'Duck Under':'Back Control', 'Uchi Mata':'Side Control', 'Hip Throw':'Side Control',
+    'Foot Sweep':'Side Control', 'Knee Tap':'Side Control', 'Blast Double':'Side Control',
+    'Headlock Throw':'Side Control',
+  },
+  guardPull: {
+    'Collar Drag':'Back Control', 'Arm Drag':'Back Control', 'Jump Closed Guard':'Closed Guard',
+    'Pull Butterfly':'Open Guard', 'Pull Half Guard':'Half Guard', 'Pull X-Guard':'Open Guard',
+    'Pull Spider Guard':'Open Guard', 'Pull De La Riva':'Open Guard', 'Sit-to-Guard':'Guard',
+    'Lapel Pull':'Open Guard',
+  },
+  sweep: {
+    from: {
+      'Scissor Sweep':'Closed Guard', 'Flower Sweep':'Closed Guard', 'Hip Bump':'Closed Guard',
+      'Butterfly Sweep':'Open Guard', 'X-Guard':'Open Guard', 'Long Step':'Open Guard',
+      'Hook Sweep':'Half Guard', 'Tripod Sweep':'Open Guard', 'Sickle Sweep':'Open Guard',
+    },
+    to: {
+      'Scissor Sweep':'Mount', 'Flower Sweep':'Mount', 'Hip Bump':'Mount',
+      'Butterfly Sweep':'Mount', 'X-Guard':'Side Control', 'Long Step':'Side Control',
+      'Hook Sweep':'Mount', 'Tripod Sweep':'Mount', 'Sickle Sweep':'Mount',
+    },
+  },
+  guardPass: {
+    from: {
+      'High Guard Pass':'Closed Guard', 'Low Guard Pass':'Closed Guard', 'Torreando':'Open Guard',
+      'X-Pass':'Open Guard', 'Over-Under':'Half Guard', 'Leg Drag':'Half Guard',
+      'Stack Pass':'Open Guard', 'Smash Pass':'Half Guard',
+    },
+    to: {
+      'High Guard Pass':'Side Control', 'Low Guard Pass':'Side Control', 'Torreando':'Side Control',
+      'X-Pass':'Side Control', 'Over-Under':'Side Control', 'Leg Drag':'Side Control',
+      'Stack Pass':'Mount', 'Smash Pass':'Side Control',
+    },
+  },
+  // Submissions can be live from more than one position — any single match counts.
+  submission: {
+    'Rear Naked Choke':['Back Control'],
+    'Triangle':['Closed Guard','Guard','Mount'],
+    'Armbar':['Mount','Closed Guard','Guard','Side Control'],
+    'Guillotine':['Closed Guard','Guard','Turtle'],
+    'Kimura':['Side Control','Closed Guard','Guard','Turtle','Mount'],
+    'Heel Hook':['Half Guard','Open Guard'],
+    'Ezekiel':['Mount','Guard'],
+    "D'Arce":['Side Control','Turtle'],
+    'Anaconda':['Turtle','Side Control'],
+    'Bow & Arrow':['Back Control'],
+  },
+};
+
+function computeJournalTechStats(journal) {
+  const stats = {};
+  (journal || []).flatMap(e => e.techniques || []).forEach(t => {
+    if (!t.name?.trim()) return;
+    if (!stats[t.name]) stats[t.name] = { learned:0, attempted:0, finished:0 };
+    stats[t.name][t.outcome] = (stats[t.name][t.outcome] || 0) + 1;
+  });
+  return stats;
+}
+
+function aggregateRollCounts(rolls, field) {
+  const out = {};
+  (rolls || []).forEach(r => {
+    Object.entries(r[field] || {}).forEach(([name, count]) => { out[name] = (out[name] || 0) + count; });
+  });
+  return out;
+}
+
+// Single-target pick: biased to techniques actually taught in class (per
+// Journal entries), split into "needs testing live" (learned, never finished —
+// the exact gap the app's own insights already flag) vs "proven, reinforce it"
+// (already finished at least once). Weighted 65/35 toward needs-testing.
+// Only falls through to the full default/custom pool if nothing's been
+// logged for that category yet, so an empty Journal still produces something.
+function pickTaughtBiased(pool, journalStats, rollCounts) {
+  if (!pool.length) return { technique: null, bucket: null };
+  const taught       = pool.filter(name => journalStats[name]);
+  const needsTesting = taught.filter(name => journalStats[name].learned > 0 && !journalStats[name].finished);
+  const proven       = taught.filter(name => journalStats[name].finished > 0);
+
+  if (needsTesting.length && (Math.random() < 0.65 || !proven.length)) {
+    return { technique: needsTesting[Math.floor(Math.random()*needsTesting.length)], bucket:'needs-testing' };
+  }
+  if (proven.length) {
+    return { technique: proven[Math.floor(Math.random()*proven.length)], bucket:'proven' };
+  }
+  const sorted = [...pool].sort((a,b) => (rollCounts[a]||0) - (rollCounts[b]||0));
+  return { technique: sorted[0], bucket:'variety' };
+}
+
+// Chain-step pick: prefer techniques with real live success so the chain is
+// achievable, optionally pre-filtered to a set of position-valid candidates.
+function pickProvenFirst(pool, rollCounts) {
+  if (!pool.length) return null;
+  const proven = pool.filter(name => (rollCounts[name] || 0) > 0);
+  const source = proven.length ? proven : pool;
+  const sorted = [...source].sort((a, b) => (rollCounts[b] || 0) - (rollCounts[a] || 0));
+  const topN = sorted.slice(0, Math.max(1, Math.ceil(sorted.length * 0.4)));
+  return topN[Math.floor(Math.random() * topN.length)];
+}
+
+function generateSingleTarget({ journal, rolls, submissions, sweeps, takedowns, guardPulls, category }) {
+  const journalStats = computeJournalTechStats(journal);
+  const pools = {
+    submission: { list: submissions, counts: aggregateRollCounts(rolls, 'subCounts') },
+    sweep:      { list: sweeps,      counts: aggregateRollCounts(rolls, 'sweepCounts') },
+    takedown:   { list: takedowns,   counts: aggregateRollCounts(rolls, 'transCounts') },
+    guardPull:  { list: guardPulls,  counts: aggregateRollCounts(rolls, 'transCounts') },
+    guardPass:  { list: DEF_GUARD_PASSES, counts: aggregateRollCounts(rolls, 'guardPassCounts') },
+  };
+  const cat = category || ['submission', 'sweep', 'takedown', 'guardPass', 'guardPull'][Math.floor(Math.random() * 5)];
+  const { list, counts } = pools[cat];
+  const { technique, bucket } = pickTaughtBiased(list, journalStats, counts);
+  if (!technique) return null;
+  return {
+    id: uid(), mode: 'single', gi: null, source: bucket,
+    steps: [{ category: cat, technique, outcome: null }],
+    resolvedAt: null,
+  };
+}
+
+// Chain target — entry type determines the whole downstream flow so each step
+// plausibly starts where the last one ended:
+//   Guard Pull  → lands a guard (bottom)  → Sweep from that same guard   → top position → Submission live from there
+//   Takedown    → lands top / a scramble  → Guard Pass (opponent recovers) → top position → Submission live from there
+// Falls back to an unconstrained pick within the category if position data
+// or Journal data doesn't cover the specific technique (e.g. custom entries).
+function generateChainTarget({ journal, rolls, takedowns, guardPulls, sweeps, submissions }) {
+  const journalStats = computeJournalTechStats(journal);
+  const taughtNames  = new Set(Object.keys(journalStats));
+  const restrictToTaught = pool => { const t = pool.filter(x => taughtNames.has(x)); return t.length ? t : pool; };
+
+  const tdCounts  = aggregateRollCounts(rolls, 'transCounts'); // shared by takedowns + guard pulls
+  const swCounts  = aggregateRollCounts(rolls, 'sweepCounts');
+  const gpCounts  = aggregateRollCounts(rolls, 'guardPassCounts');
+  const subCounts = aggregateRollCounts(rolls, 'subCounts');
+
+  const useGuardPull = guardPulls.length && (!takedowns.length || Math.random() < 0.5);
+  const entryCat   = useGuardPull ? 'guardPull' : 'takedown';
+  const entryPool  = restrictToTaught(useGuardPull ? guardPulls : takedowns);
+  const entryTech  = pickProvenFirst(entryPool, tdCounts);
+  if (!entryTech) return null;
+  const entryEndPos = useGuardPull ? TECH_POSITIONS.guardPull[entryTech] : TECH_POSITIONS.takedown[entryTech];
+
+  let advCat, advTech, advEndPos;
+  if (useGuardPull) {
+    advCat = 'sweep';
+    let pool = restrictToTaught(sweeps).filter(t => !entryEndPos || !TECH_POSITIONS.sweep.from[t] || TECH_POSITIONS.sweep.from[t] === entryEndPos);
+    if (!pool.length) pool = restrictToTaught(sweeps);
+    advTech = pickProvenFirst(pool, swCounts);
+    advEndPos = advTech ? (TECH_POSITIONS.sweep.to[advTech] || null) : null;
+  } else {
+    advCat = 'guardPass';
+    const pool = restrictToTaught(DEF_GUARD_PASSES);
+    advTech = pickProvenFirst(pool, gpCounts);
+    advEndPos = advTech ? (TECH_POSITIONS.guardPass.to[advTech] || null) : null;
+  }
+  if (!advTech) return null;
+
+  let subPool = restrictToTaught(submissions).filter(t => {
+    const valid = TECH_POSITIONS.submission[t];
+    return !advEndPos || !valid || valid.includes(advEndPos);
+  });
+  if (!subPool.length) subPool = restrictToTaught(submissions);
+  const finishTech = pickProvenFirst(subPool, subCounts);
+  if (!finishTech) return null;
+
+  return {
+    id: uid(), mode: 'chain', gi: null, source: 'chain',
+    steps: [
+      { category: entryCat,     technique: entryTech,  outcome: null, toPos: entryEndPos || null },
+      { category: advCat,       technique: advTech,    outcome: null, fromPos: (useGuardPull ? entryEndPos : null), toPos: advEndPos || null },
+      { category: 'submission', technique: finishTech, outcome: null, fromPos: advEndPos || null },
+    ],
+    resolvedAt: null,
+  };
+}
+
+function TargetCard({ target, onSetOutcome, onDelete }) {
+  const allResolved = target.steps.every(s => s.outcome);
+  return (
+    <View style={{ borderWidth:1, borderColor:allResolved?C.border:`${C.gold}44`, backgroundColor:C.card, marginBottom:10 }}>
+      <View style={{ flexDirection:'row', alignItems:'center', padding:12, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor:allResolved?C.faint:C.goldDim }}>
+        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:allResolved?C.muted:C.gold, flex:1 }}>
+          {target.mode === 'chain' ? '⛓ Chain Target' : '🎯 Target'}
+        </Txt>
+        {!allResolved && (
+          <TouchableOpacity onPress={()=>onDelete(target.id)} activeOpacity={0.75}>
+            <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
+          </TouchableOpacity>
+        )}
+      </View>
+      <View style={{ padding:12 }}>
+        {target.steps.map((step, i) => {
+          const cfg = TARGET_STEP_CFG[step.category];
+          return (
+            <View key={i} style={{ marginBottom: i<target.steps.length-1 ? 14 : 0 }}>
+              {target.mode==='chain' && i>0 && (
+                <View style={{ alignItems:'center', marginBottom:6 }}>
+                  <Txt style={{ color:C.border, fontSize:14 }}>↓</Txt>
+                </View>
+              )}
+              <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:8 }}>
+                <Txt style={{ fontSize:14 }}>{cfg.icon}</Txt>
+                <View style={{ flex:1 }}>
+                  <Cap style={{ fontSize:8, color:cfg.color }}>{cfg.label}</Cap>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.text }}>{step.technique}</Txt>
+                  {(step.fromPos || step.toPos) && (
+                    <Txt style={{ fontSize:9, color:C.muted, marginTop:1 }}>
+                      {step.fromPos || (i===0 ? 'Standing' : 'opponent recovers')} → {step.toPos || 'finish'}
+                    </Txt>
+                  )}
+                </View>
+              </View>
+              <View style={{ flexDirection:'row', gap:6 }}>
+                {TARGET_OUTCOMES.map(o => {
+                  const active = step.outcome === o.key;
+                  return (
+                    <TouchableOpacity key={o.key} onPress={()=>onSetOutcome(target.id, i, o.key)} activeOpacity={0.75}
+                      style={{ flex:1, paddingVertical:8, borderWidth:1, alignItems:'center',
+                        borderColor: active ? o.color : C.border,
+                        backgroundColor: active ? o.bg : 'transparent' }}>
+                      <Txt style={{ fontSize:9, fontFamily:F.semi, color: active ? o.color : C.muted }}>{o.label}</Txt>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function TargetsScreen({ targets, setTargets, athlete, rolls, journal, submissions, sweeps, takedowns, guardPulls, confirm }) {
+  const [generating, setGenerating] = useState(false);
+
+  const active  = targets.filter(t => !t.resolvedAt);
+  const history = [...targets.filter(t => t.resolvedAt)].sort((a,b) => (b.resolvedAt||'').localeCompare(a.resolvedAt||''));
+
+  const allSteps      = targets.flatMap(t => t.steps);
+  const resolvedSteps = allSteps.filter(s => s.outcome);
+  const landedSteps   = resolvedSteps.filter(s => s.outcome === 'landed');
+  const landRate      = resolvedSteps.length ? Math.round((landedSteps.length/resolvedSteps.length)*100) : 0;
+  const chainsTotal     = history.filter(t => t.mode==='chain').length;
+  const chainsCompleted = history.filter(t => t.mode==='chain' && t.steps.every(s=>s.outcome==='landed')).length;
+
+  const newTarget = async (mode) => {
+    if (!athlete?.id) return;
+    setGenerating(true);
+    const draft = mode==='chain'
+      ? generateChainTarget({ journal, rolls, takedowns, guardPulls, sweeps, submissions })
+      : generateSingleTarget({ journal, rolls, submissions, sweeps, takedowns, guardPulls });
+    if (!draft) {
+      setGenerating(false);
+      Alert.alert('Not enough data yet', 'Log a few techniques in your Journal or a few rolls first, then try again.');
+      return;
+    }
+    draft.athleteId = athlete.id;
+    try {
+      const saved = await db.createTarget(draft);
+      setTargets(ts => [saved, ...ts]);
+    } catch(e) { console.error('createTarget failed:', e.message); }
+    setGenerating(false);
+  };
+
+  const setOutcome = (targetId, stepIndex, outcome) => {
+    setTargets(ts => ts.map(t => {
+      if (t.id !== targetId) return t;
+      const steps = t.steps.map((s,i) => i===stepIndex ? { ...s, outcome } : s);
+      const allDone = steps.every(s => s.outcome);
+      const resolvedAt = allDone ? new Date().toISOString() : null;
+      db.updateTargetSteps(targetId, steps, resolvedAt).catch(console.error);
+      return { ...t, steps, resolvedAt };
+    }));
+  };
+
+  const deleteTarget = async (id) => {
+    const ok = await confirm('Remove this target?');
+    if (!ok) return;
+    await db.deleteTarget(id).catch(console.error);
+    setTargets(ts => ts.filter(t => t.id !== id));
+  };
+
+  return (
+    <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
+
+      <View style={{ flexDirection:'row', gap:8, marginBottom:16 }}>
+        {[
+          { label:'Active',      value: active.length, color:C.gold },
+          { label:'Landed Rate', value: resolvedSteps.length ? `${landRate}%` : '—', color:C.sage },
+          { label:'Chains Done', value: chainsTotal ? `${chainsCompleted}/${chainsTotal}` : '—', color:C.teal },
+          { label:'Total Set',   value: targets.length, color:C.muted },
+        ].map(({label,value,color}) => (
+          <View key={label} style={{ flex:1, borderWidth:1, borderColor:C.border, backgroundColor:C.card, padding:10, alignItems:'center' }}>
+            <Txt style={{ fontSize:16, fontFamily:F.display, color, lineHeight:20 }}>{value}</Txt>
+            <Cap style={{ fontSize:6, textAlign:'center', marginTop:3 }}>{label}</Cap>
+          </View>
+        ))}
+      </View>
+
+      <View style={{ flexDirection:'row', gap:8, marginBottom:20 }}>
+        <TouchableOpacity onPress={()=>newTarget('single')} disabled={generating} activeOpacity={0.8}
+          style={{ flex:1, backgroundColor:C.gold, padding:14, alignItems:'center', opacity:generating?0.6:1 }}>
+          <Txt style={{ fontSize:18, marginBottom:4 }}>🎯</Txt>
+          <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:C.charcoal }}>Single Target</Txt>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={()=>newTarget('chain')} disabled={generating} activeOpacity={0.8}
+          style={{ flex:1, backgroundColor:C.sage, padding:14, alignItems:'center', opacity:generating?0.6:1 }}>
+          <Txt style={{ fontSize:18, marginBottom:4 }}>⛓️</Txt>
+          <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:C.offWhite }}>Chain Target</Txt>
+        </TouchableOpacity>
+      </View>
+
+      {active.length > 0 && (
+        <View style={{ marginBottom:20 }}>
+          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
+            <View style={{ width:3, height:14, backgroundColor:C.gold, marginRight:10 }}/>
+            <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>Active</Txt>
+          </View>
+          {active.map(t => <TargetCard key={t.id} target={t} onSetOutcome={setOutcome} onDelete={deleteTarget}/>)}
+        </View>
+      )}
+
+      {active.length === 0 && (
+        <View style={{ borderWidth:1, borderColor:C.border, backgroundColor:C.card, padding:32, alignItems:'center', marginBottom:20 }}>
+          <Txt style={{ fontSize:28, marginBottom:12 }}>🎯</Txt>
+          <Cap style={{ textAlign:'center', marginBottom:8 }}>No active targets</Cap>
+          <Txt style={{ fontSize:12, color:C.muted, textAlign:'center', lineHeight:18 }}>
+            Get a single technique to drill toward, or a chain to link your opener, advance, and finish into one game plan.
+          </Txt>
+        </View>
+      )}
+
+      {history.length > 0 && (
+        <View>
+          <View style={{ flexDirection:'row', alignItems:'center', marginBottom:10 }}>
+            <View style={{ width:3, height:14, backgroundColor:C.teal, marginRight:10 }}/>
+            <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.textDim }}>History</Txt>
+          </View>
+          {history.map(t => <TargetCard key={t.id} target={t} onSetOutcome={setOutcome} onDelete={deleteTarget}/>)}
+        </View>
+      )}
+
+    </ScrollView>
   );
 }
 
@@ -3137,7 +3969,7 @@ function ConsentModal({ onAgree, onDecline }) {
               </Txt>
             </View>
             <Cap style={{ color:'rgba(13,13,11,0.65)', fontSize:9 }}>
-              Grounded Skills Lab · Version {CONSENT_VERSION}
+              MatAnalyst · Version {CONSENT_VERSION}
             </Cap>
           </View>
 
@@ -3157,7 +3989,7 @@ function ConsentModal({ onAgree, onDecline }) {
               1. Purpose
             </Txt>
             <Txt style={{ fontSize:12, color:C.textDim, lineHeight:20, marginBottom:14 }}>
-              You are participating in a closed beta test of the GSL BJJ Tracker app ("the App"),
+              You are participating in a closed beta test of the MatAnalyst app ("the App"),
               operated by Grounded Skills Lab. This agreement governs your use of the App during the
               beta testing period.
             </Txt>
@@ -4198,13 +5030,13 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
   // ── Cumulative data ──────────────────────────────────────────────────────────
   const allRolls = [...(activeRoll ? [activeRoll] : []), ...rolls];
   const cumData  = allRolls.reduce((m, r) => {
-    ['subCounts','sweepCounts','posDurations','transCounts','guardPassCounts',
-     'opp_subCounts','opp_sweepCounts','opp_posDurations','opp_transCounts','opp_guardPassCounts']
+    ['subCounts','sweepCounts','posCounts','transCounts','guardPassCounts',
+     'opp_subCounts','opp_sweepCounts','opp_posCounts','opp_transCounts','opp_guardPassCounts']
       .forEach(k => Object.entries(r[k]||{}).forEach(([kk,v]) => { m[k][kk]=(m[k][kk]||0)+v; }));
     m.eventLog=[...m.eventLog,...(r.eventLog||[])];
     return m;
-  }, {subCounts:{},sweepCounts:{},posDurations:{},transCounts:{},guardPassCounts:{},
-      opp_subCounts:{},opp_sweepCounts:{},opp_posDurations:{},opp_transCounts:{},opp_guardPassCounts:{},eventLog:[]});
+  }, {subCounts:{},sweepCounts:{},posCounts:{},transCounts:{},guardPassCounts:{},
+      opp_subCounts:{},opp_sweepCounts:{},opp_posCounts:{},opp_transCounts:{},opp_guardPassCounts:{},eventLog:[]});
 
   const rollData   = scope==='all' ? cumData : (rolls.find(r=>r.id===scope)||cumData);
   const tdSet      = new Set(takedowns);
@@ -4822,8 +5654,8 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
           <Section title="Guard Passes" accent={C.teal}>
             <PieChart size={200} data={Object.entries(rollData.guardPassCounts||{}).map(([k,v],i)=>({label:k,value:v,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
           </Section>
-          <Section title="Position Time" accent={C.sage}>
-            <PieChart size={200} data={positions.map((p,i)=>({label:p,value:rollData.posDurations[p]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
+          <Section title="Positions" accent={C.sage}>
+            <PieChart size={200} data={positions.map((p,i)=>({label:p,value:rollData.posCounts[p]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
           </Section>
           <Section title="Takedowns" accent={C.blue}>
             <PieChart size={200} data={transitions.filter(t=>tdSet.has(t)).map((t,i)=>({label:t,value:rollData.transCounts[t]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
@@ -4841,8 +5673,8 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
           <Section title="Opp. Sweeps" accent={C.opp}>
             <PieChart size={200} data={sweeps.map((s,i)=>({label:s,value:rollData.opp_sweepCounts[s]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
           </Section>
-          <Section title="Opp. Position Time" accent={C.opp}>
-            <PieChart size={200} data={positions.map((p,i)=>({label:p,value:rollData.opp_posDurations[p]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
+          <Section title="Opp. Positions" accent={C.opp}>
+            <PieChart size={200} data={positions.map((p,i)=>({label:p,value:rollData.opp_posCounts[p]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
           </Section>
         </View>)}
 
@@ -4863,15 +5695,15 @@ function TrackScreen({ activeRoll, onStartRoll, onEndRoll, onTogglePause, onMuta
       {!activeRoll ? (
         <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:32 }}>
           {/* Large logo mark — centrepiece */}
-          <GSLLogo size={100}/>
+          <AppLogo size={100}/>
           <View style={{ width:40, height:2, backgroundColor:C.gold, marginTop:20, marginBottom:20 }}/>
           {/* Profile identity */}
           <Txt style={{ fontSize:9, color:C.muted, letterSpacing:4, textTransform:'uppercase', marginBottom:6, textAlign:'center' }}>{activeProfile?.name||'Athlete'}</Txt>
           <View style={{ marginBottom:8 }}><BeltBadge belt={activeProfile?.belt||'white'} stripes={activeProfile?.stripes||0} size="lg"/></View>
           {activeProfile?.gym ? <Txt style={{ fontSize:9, color:C.muted, letterSpacing:1, marginBottom:28 }}>{activeProfile.gym}</Txt> : <View style={{ height:28 }}/>}
           {/* Brand tagline */}
-          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.text, letterSpacing:-0.5, textAlign:'center', lineHeight:28 }}>Train. Measure.</Txt>
-          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.gold, letterSpacing:-0.5, textAlign:'center', lineHeight:28, marginBottom:36 }}>Improve. Repeat.</Txt>
+          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.text, letterSpacing:-0.5, textAlign:'center', lineHeight:28 }}>A smarter way to</Txt>
+          <Txt style={{ fontSize:22, fontFamily:F.display, color:C.gold, letterSpacing:-0.5, textAlign:'center', lineHeight:28, marginBottom:36 }}>analyze your game.</Txt>
           {/* CTA */}
           <TouchableOpacity onPress={()=>setShowStart(true)} activeOpacity={0.8}
             style={{ backgroundColor:C.gold, paddingHorizontal:44, paddingVertical:16, alignItems:'center' }}>
@@ -4910,6 +5742,8 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
   const [viewingRoll, setViewing] = useState(null);
   const [showEnd, setShowEnd]     = useState(false);
   const [rollsState, setRollsState] = useState(rolls);
+  const viewPlayerRef = useRef(null);
+  const [viewManualSeconds, setViewManualSeconds] = useState(0);
 
   useEffect(() => setRollsState(rolls), [rolls]);
 
@@ -4918,6 +5752,7 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
   if (viewingRoll) {
     const current = [...(activeRoll?[activeRoll]:[]), ...rolls].find(r=>r.id===viewingRoll.id) || viewingRoll;
     const isActive = activeRoll?.id === viewingRoll.id;
+    const curIsDirect = isDirectVideoSource(current.videoUrl);
     return (
       <View style={{ flex:1 }}>
         <View style={{ backgroundColor:C.surface, borderBottomWidth:1, borderBottomColor:C.border, flexDirection:'row', alignItems:'center', padding:14, gap:12 }}>
@@ -4930,9 +5765,17 @@ function RollsScreen({ rolls, activeRoll, onTogglePause, onEndRoll, confirm, tra
           </Txt>
         </View>
         <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding:16 }}>
+          {current.videoUrl && (
+            curIsDirect
+              ? <InlineVideoPlayer ref={viewPlayerRef} uri={current.videoUrl}/>
+              : (getYouTubeId(current.videoUrl)
+                  ? <TechVideoRef url={current.videoUrl}/>
+                  : <ManualTimeEntry url={current.videoUrl} seconds={viewManualSeconds} onChangeSeconds={setViewManualSeconds}/>)
+          )}
           <ScoreComparison roll={current}/>
           <View style={{ height:16 }}/>
-          <EventLogPanel log={current.eventLog||[]}/>
+          <EventLogPanel log={current.eventLog||[]} roll={current}
+            onSeek={current.videoUrl ? (curIsDirect ? sec=>viewPlayerRef.current?.seekTo(sec) : setViewManualSeconds) : null}/>
         </ScrollView>
         {isActive && <>
           <View style={{ backgroundColor:C.faint, borderTopWidth:1, borderTopColor:C.border, flexDirection:'row', gap:8, padding:12 }}>
@@ -5072,7 +5915,7 @@ function CompsScreen({ competitions, setCompetitions, trackingProps, confirm, on
           <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS==='ios'?'padding':'height'}>
             <ScrollView contentContainerStyle={{ flexGrow:1, backgroundColor:'rgba(10,10,8,0.9)', alignItems:'center', justifyContent:'center', padding:24 }}>
               <View style={{ backgroundColor:C.surface, borderWidth:1, borderColor:C.borderMid, width:'100%', maxWidth:400, padding:24 }}>
-                <Cap style={{ marginBottom:4 }}>Grounded Skills Lab</Cap>
+                <Cap style={{ marginBottom:4 }}>MatAnalyst</Cap>
                 <Txt style={{ fontSize:16, fontFamily:F.bold, marginBottom:20 }}>How did the round end?</Txt>
 
                 {/* End type buttons */}
@@ -5521,7 +6364,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
   const [compsMap,   setCompsMap]  = useState({});
   const [daysMap,    setDaysMap]   = useState({});
   const [loading,    setLoading]   = useState(true);
-  const [isDark,     setIsDark]    = useState(true);
+  const [isDark,     setIsDark]    = useState(false);  // MatAnalyst is light-first (Option D)
   const [activeView, setActiveView] = useState('athletes'); // 'athletes' | 'manage'
 
   // Manage panel state
@@ -5835,7 +6678,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
       {/* Header */}
       <View style={{ backgroundColor:C.surface, borderBottomWidth:1, borderBottomColor:C.border, padding:12 }}>
         <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
-          <GSLLogo size={28}/>
+          <AppLogo size={28}/>
           <View style={{ flex:1 }}>
             <Txt style={{ fontSize:11, fontFamily:F.display, letterSpacing:2, textTransform:'uppercase', color:C.text }}>
               {isAdmin ? 'Admin Dashboard' : 'Coach Dashboard'}
@@ -6521,7 +7364,7 @@ function CoachDashboard({ session, onSwitchToAthlete, userRole, onLogForAthlete 
             {/* Detail panel */}
             {!selected ? (
               <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
-                <GSLLogo size={48}/>
+                <AppLogo size={48}/>
                 <View style={{ width:30, height:2, backgroundColor:C.gold, marginVertical:14 }}/>
                 <Cap>{sidebarOpen ? 'Select an athlete to view their data' : 'Tap ☰ to see athletes'}</Cap>
               </View>
@@ -6929,10 +7772,10 @@ function AuthScreen({ onAuth }) {
         <ScrollView contentContainerStyle={{ flexGrow:1, alignItems:'center', justifyContent:'center', padding:32 }}>
 
           {/* Logo + wordmark */}
-          <GSLLogo size={80}/>
+          <AppLogo size={80}/>
           <View style={{ width:40, height:2, backgroundColor:C.gold, marginTop:20, marginBottom:8 }}/>
-          <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.text, marginBottom:2 }}>Grounded</Txt>
-          <Txt style={{ fontSize:9, fontFamily:F.display, letterSpacing:3, textTransform:'uppercase', color:C.gold, marginBottom:40 }}>Skills Lab</Txt>
+          <Txt style={{ fontSize:20, fontFamily:F.display, letterSpacing:0.5, color:C.text, marginBottom:2 }}>Mat<Txt style={{ fontFamily:F.display, color:C.gold }}>Analyst</Txt></Txt>
+          <View style={{ marginTop:8, marginBottom:40 }}><GSLCredit/></View>
 
           {/* Form */}
           <View style={{ width:'100%', maxWidth:380 }}>
@@ -7004,7 +7847,7 @@ function AuthScreen({ onAuth }) {
           </View>
 
           <Txt style={{ fontSize:8, color:C.border, letterSpacing:2, textTransform:'uppercase', marginTop:48 }}>
-            Train. Measure. Improve. Repeat.
+            A smarter way to analyze your game.
           </Txt>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -7089,7 +7932,7 @@ export default function App() {
 // ─── Main App (authenticated) ─────────────────────────────────────────────────
 function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onStopImpersonating }) {
   // ── Theme state ─────────────────────────────────────────────────────────────
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);  // MatAnalyst is light-first (Option D)
   const toggleTheme = () => {
     setIsDark(prev => {
       const next = !prev;
@@ -7116,7 +7959,6 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
       'Inter_500Medium':     { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZ9hiJ-Ek-_EeA.woff2' },
       'Inter_600SemiBold':   { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYAZ9hiJ-Ek-_EeA.woff2' },
       'Inter_700Bold':       { uri: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYAZ9hiJ-Ek-_EeA.woff2' },
-      'DMSerifDisplay_400Regular': { uri: 'https://fonts.gstatic.com/s/dmserifdisplay/v15/-nFnOHM81r4j6k0gjALR8uVua8QHJbkn_E3OSQ.woff2' },
     }).then(() => setFontsLoaded(true)).catch(() => setFontsLoaded(true));
   }, []);
 
@@ -7132,6 +7974,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   const [competitions, setCompetitions] = useState([]);
   const [trainingDays, setTrainingDays] = useState([]);
   const [journal,         setJournal]         = useState([]);
+  const [targets,         setTargets]         = useState([]);
   const [classLogs,       setClassLogs]       = useState([]);
   const [skippedLogIds,   setSkippedLogIds]   = useState(new Set());
   const [showTutorial,    setShowTutorial]    = useState(false);
@@ -7171,15 +8014,17 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           if (techs.guard_pulls?.length) setGuardPulls(techs.guard_pulls);
           if (techs.takedowns?.length)   setTakedowns(techs.takedowns);
         }
-        const [dbRolls, dbDays, dbComps, dbJournal] = await Promise.all([
+        const [dbRolls, dbDays, dbComps, dbJournal, dbTargets] = await Promise.all([
           db.getRolls(ath.id),
           db.getTrainingDays(ath.id),
           db.getCompetitions(ath.id),
           db.getJournalEntries(ath.id),
+          db.getTargets(ath.id),
         ]);
         setRolls(dbRolls.map(fromDbRoll));
         setTrainingDays(dbDays);
         setCompetitions(dbComps);
+        setTargets(dbTargets);
         setJournal(dbJournal.map(e => ({
           id: e.id, athleteId: e.athlete_id,
           date: e.date, sessionType: e.session_type,
@@ -7360,7 +8205,7 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
   if (!fontsLoaded || loading) return (
     <View style={{ flex:1, backgroundColor:C.bg, alignItems:'center', justifyContent:'center', paddingTop:TOP_INSET }}>
       <StatusBar barStyle={isDark?'light-content':'dark-content'}/>
-      <GSLLogo size={56}/>
+      <AppLogo size={56}/>
       <View style={{ width:30, height:2, backgroundColor:C.gold, marginTop:16, marginBottom:16 }}/>
       <ActivityIndicator color={C.gold} size="large"/>
       <Cap style={{ marginTop:16 }}>
@@ -7419,10 +8264,10 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
           {/* Row 1: Logo + wordmark + controls */}
           <View style={{ flexDirection:'row', alignItems:'center', paddingTop:10, paddingBottom:8, gap:8 }}>
             {/* Logo */}
-            <GSLLogo size={30}/>
+            <AppLogo size={30}/>
             {/* Wordmark */}
             <View style={{ marginLeft:2 }}>
-              <Txt style={{ fontSize:12, fontFamily:F.semi, letterSpacing:0.5, color:C.gold, lineHeight:15 }}>Grounded Skills Lab</Txt>
+              <Txt style={{ fontSize:12, fontFamily:F.semi, letterSpacing:0.5, color:C.text, lineHeight:15 }}>Mat<Txt style={{ fontFamily:F.semi, color:C.gold }}>Analyst</Txt></Txt>
               <Txt style={{ fontSize:9, fontFamily:F.body, color:C.muted, lineHeight:12 }}>BJJ Analytics</Txt>
             </View>
             {/* Spacer */}
@@ -7578,6 +8423,14 @@ function AppMain({ session, onSwitchToCoach, isCoach, impersonatedAthlete, onSto
             setSkippedLogIds(new Set(updated));
           }}
           allTechniques={[...submissions,...sweeps,...positions,...transitions,...guardPulls,...takedowns]}/>
+      )}
+      {tab==='Targets' && (
+        <TargetsScreen
+          targets={targets} setTargets={setTargets}
+          athlete={athlete} rolls={rolls} journal={journal}
+          submissions={submissions} sweeps={sweeps}
+          takedowns={takedowns} guardPulls={guardPulls}
+          confirm={confirm}/>
       )}
       {tab==='Charts' && (
         <ChartsScreen
