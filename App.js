@@ -914,6 +914,7 @@ function getExchanges(roll) {
 }
 function exchangeOutcome(ex) {
   if (ex.open) return { text:'Ongoing', color:C.muted };
+  if (ex.items.some(i=>i.classified===false)) return { text:'Unclassified', color:C.gold };
   const r = ex.endEvent;
   if (r?.cause==='submission') return { text:`Sub: ${r.technique} (${r.side==='me'?'you':'opp'})`, color:r.side==='me'?C.gold:C.opp };
   return { text:'No finish', color:C.muted };
@@ -949,8 +950,27 @@ function EndEventCard({ ev, fmtTs }) {
   );
 }
 const EVENT_TC = { submission:C.red, sweep:C.gold, position:C.sage, transition:C.blue, guardPass:C.teal, takedown:C.blue, reset:C.muted, end:C.stone };
-function EventRow({ ev, fmtTs, canSeek, onSeek, onDelete }) {
+function EventRow({ ev, fmtTs, canSeek, onSeek, onDelete, onClassify }) {
   const sc = ev.side==='me' ? C.gold : C.stone;
+
+  if (ev.classified===false) {
+    return (
+      <TouchableOpacity activeOpacity={onClassify?0.6:1} onPress={()=>onClassify&&onClassify(ev)}
+        style={{ flexDirection:'row', alignItems:'center', paddingVertical:10, borderBottomWidth:1, borderBottomColor:C.border }}>
+        <View style={{ width:4, height:4, backgroundColor:sc, marginRight:12 }}/>
+        <View style={{ flex:1 }}>
+          <Txt style={{ fontSize:13, fontFamily:F.medium, color:C.gold }}>Tap to classify</Txt>
+          <Txt style={{ fontSize:10, color:C.muted, marginTop:2 }}>{ev.side==='me'?'You':ev.side==='opp'?'Opp':''} · {fmtTs(ev)}</Txt>
+        </View>
+        {onDelete && (
+          <TouchableOpacity onPress={onDelete} style={{ padding:8 }} activeOpacity={0.7}>
+            <Txt style={{ color:C.muted, fontSize:16 }}>✕</Txt>
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  }
+
   const tc = EVENT_TC[ev.type] || C.muted;
   const contextParts = [];
   if (ev.fromPosition) contextParts.push(`from ${ev.fromPosition}`);
@@ -995,7 +1015,7 @@ function EventRow({ ev, fmtTs, canSeek, onSeek, onDelete }) {
   );
 }
 
-function EventLogPanel({ log=[], onDeleteEvent, roll=null, onSeek=null }) {
+function EventLogPanel({ log=[], onDeleteEvent, roll=null, onSeek=null, onClassify=null }) {
   if (!log.length) return <Cap style={{ textAlign:'center', marginVertical:32 }}>No events recorded</Cap>;
   // ev.ts means different things depending on how the roll was logged — see
   // getVideoSeekSeconds. Format and seek accordingly rather than assuming wall-clock.
@@ -1030,7 +1050,7 @@ function EventLogPanel({ log=[], onDeleteEvent, roll=null, onSeek=null }) {
               {!ex.items.length && <Cap style={{ padding:10 }}>No taps in this exchange</Cap>}
               {ex.items.map((ev,i) => (
                 <EventRow key={ev.id||i} ev={ev} fmtTs={fmtTs} canSeek={canSeek(ev)} onSeek={seekFor(ev)}
-                  onDelete={onDeleteEvent?()=>onDeleteEvent(ev.id):null}/>
+                  onDelete={onDeleteEvent?()=>onDeleteEvent(ev.id):null} onClassify={onClassify}/>
               ))}
             </View>
           );
@@ -1044,7 +1064,7 @@ function EventLogPanel({ log=[], onDeleteEvent, roll=null, onSeek=null }) {
       {[...log].reverse().map((ev,i) => ev.type==='end'
         ? <EndEventCard key={ev.id||i} ev={ev} fmtTs={fmtTs}/>
         : <EventRow key={ev.id||i} ev={ev} fmtTs={fmtTs} canSeek={canSeek(ev)} onSeek={seekFor(ev)}
-            onDelete={onDeleteEvent?()=>onDeleteEvent(ev.id):null}/>
+            onDelete={onDeleteEvent?()=>onDeleteEvent(ev.id):null} onClassify={onClassify}/>
       )}
     </View>
   );
@@ -1643,7 +1663,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   const SUBTABS = ['Score','Submissions','Sweeps','Guard Pass','Transitions','Positions','Event Log'];
   const [subTab, setSubTab]         = useState('Score');
   const [trackingOpp, setTracking]  = useState(false);
-  const [scoreSheet, setScoreSheet] = useState(null); // 'me'|'opp'|null
+  const [classifyingId, setClassifyingId] = useState(null); // id of the marker being classified, or null
   const [showReset,  setShowReset]  = useState(false);
   const [customSubInput, setCSI]    = useState('');
   const [customSwpInput, setCSW]    = useState('');
@@ -1716,12 +1736,12 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
     addTrans(n);
   };
 
-  const quickScore = (isOpp, scoreKey, context={}) => {
-    const se = SCORE_EVENTS[scoreKey]; if(!se) return;
-    const s   = isOpp?'opp':'me';
-    const pfx = isOpp?'opp_':'';
-
-    // Build a rich human-readable label from context
+  // Shared by quickScore (creates + classifies in one step) and classifyMarker
+  // (classifies a marker that was already tapped, at whatever moment that was).
+  // Same fields, same count bumps, either way — the only difference is whether
+  // there's a brand-new event or an existing unclassified one to fill in.
+  const buildScoreEventFields = (scoreKey, context={}) => {
+    const se = SCORE_EVENTS[scoreKey]; if(!se) return null;
     const buildLabel = () => {
       switch(scoreKey) {
         case 'sweep':
@@ -1738,59 +1758,74 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
           return se.label;
       }
     };
-
-    const ev = {
-      id:uid(), ts:getTs(), side:s,
+    return {
       type: se.category,
       item: context.technique || context.advType || context.toPosition || se.label,
       label: buildLabel(),
       scoreKey,
       scored: se.pts > 0,
       pts: se.pts,
-      // Contextual fields
-      fromPosition:  context.fromPosition  || null,
-      toPosition:    context.toPosition    || null,
-      technique:     context.technique     || null,
-      guardPassed:   context.guardPassed   || null,
-      advType:       context.advType       || null,
+      fromPosition: context.fromPosition || null,
+      toPosition:   context.toPosition   || null,
+      technique:    context.technique    || null,
+      guardPassed:  context.guardPassed  || null,
+      advType:      context.advType      || null,
+      classified: true,
     };
+  };
 
+  const applyScoreCounts = (u, pfx, scoreKey, context={}) => {
+    if (scoreKey==='sweep' && context.technique) {
+      u[`${pfx}sweepCounts`] = { ...u[`${pfx}sweepCounts`], [context.technique]:(u[`${pfx}sweepCounts`][context.technique]||0)+1 };
+      if (!sweeps.includes(context.technique)) setSweeps(sw=>[...sw,context.technique]);
+      if (context.fromPosition) u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], [context.fromPosition]:(u[`${pfx}posCounts`][context.fromPosition]||0)+1 };
+    }
+    else if (scoreKey==='takedown' && context.technique) {
+      u[`${pfx}transCounts`] = { ...u[`${pfx}transCounts`], [context.technique]:(u[`${pfx}transCounts`][context.technique]||0)+1 };
+      if (!transitions.includes(context.technique)) setTransitions(t=>[...t,context.technique]);
+      if (!takedowns.includes(context.technique))   setTakedowns(td=>[...td,context.technique]);
+      if (context.toPosition) u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], [context.toPosition]:(u[`${pfx}posCounts`][context.toPosition]||0)+1 };
+    }
+    else if (scoreKey==='guardPass') {
+      const passKey = context.technique || context.guardPassed || 'Guard Pass';
+      u[`${pfx}guardPassCounts`] = { ...u[`${pfx}guardPassCounts`], [passKey]:(u[`${pfx}guardPassCounts`][passKey]||0)+1 };
+    }
+    else if (scoreKey==='guardPull') {
+      if (context.toPosition) u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], [context.toPosition]:(u[`${pfx}posCounts`][context.toPosition]||0)+1 };
+    }
+    else if (scoreKey==='mount')       u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], 'Mount':(u[`${pfx}posCounts`]['Mount']||0)+1 };
+    else if (scoreKey==='backControl') u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], 'Back Control':(u[`${pfx}posCounts`]['Back Control']||0)+1 };
+    else if (scoreKey==='kneeOnBelly') u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], 'Knee on Belly':(u[`${pfx}posCounts`]['Knee on Belly']||0)+1 };
+    return u;
+  };
+
+  // Mark now: drop a bare, unclassified event the instant something happens —
+  // no modal, no decision, just a timestamped side. Classification happens later.
+  const markEvent = isOpp => {
+    if (isPaused) return;
+    onMutate(r => ({ ...r, eventLog:[...(r.eventLog||[]), {
+      id:uid(), ts:getTs(), side:isOpp?'opp':'me',
+      type:null, item:null, label:null, scoreKey:null, scored:false, pts:0, classified:false,
+    }] }));
+  };
+
+  // Classify later: fill in an already-marked event with what it actually was.
+  const classifyMarker = (id, scoreKey, context={}) => {
+    const marker = (roll.eventLog||[]).find(e=>e.id===id); if(!marker) return;
+    const fields = buildScoreEventFields(scoreKey, context); if(!fields) return;
+    const pfx = marker.side==='opp' ? 'opp_' : '';
     onMutate(r => {
-      let u = { ...r, eventLog:[...(r.eventLog||[]),ev] };
-
-      if (scoreKey==='sweep' && context.technique) {
-        u[`${pfx}sweepCounts`] = { ...u[`${pfx}sweepCounts`], [context.technique]:(u[`${pfx}sweepCounts`][context.technique]||0)+1 };
-        if (!sweeps.includes(context.technique)) setSweeps(sw=>[...sw,context.technique]);
-        // Auto-record starting position entry
-        if (context.fromPosition) {
-          u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], [context.fromPosition]:(u[`${pfx}posCounts`][context.fromPosition]||0)+1 };
-        }
-      }
-      else if (scoreKey==='takedown' && context.technique) {
-        u[`${pfx}transCounts`] = { ...u[`${pfx}transCounts`], [context.technique]:(u[`${pfx}transCounts`][context.technique]||0)+1 };
-        if (!transitions.includes(context.technique)) setTransitions(t=>[...t,context.technique]);
-        if (!takedowns.includes(context.technique))   setTakedowns(td=>[...td,context.technique]);
-        // Auto-record end position
-        if (context.toPosition) {
-          u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], [context.toPosition]:(u[`${pfx}posCounts`][context.toPosition]||0)+1 };
-        }
-      }
-      else if (scoreKey==='guardPass') {
-        const passKey = context.technique || context.guardPassed || 'Guard Pass';
-        u[`${pfx}guardPassCounts`] = { ...u[`${pfx}guardPassCounts`], [passKey]:(u[`${pfx}guardPassCounts`][passKey]||0)+1 };
-      }
-      else if (scoreKey==='guardPull') {
-        // Guard pull → record end position
-        if (context.toPosition) {
-          u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], [context.toPosition]:(u[`${pfx}posCounts`][context.toPosition]||0)+1 };
-        }
-      }
-      else if (scoreKey==='mount')       { u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], 'Mount':(u[`${pfx}posCounts`]['Mount']||0)+1 }; }
-      else if (scoreKey==='backControl') { u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], 'Back Control':(u[`${pfx}posCounts`]['Back Control']||0)+1 }; }
-      else if (scoreKey==='kneeOnBelly') { u[`${pfx}posCounts`] = { ...u[`${pfx}posCounts`], 'Knee on Belly':(u[`${pfx}posCounts`]['Knee on Belly']||0)+1 }; }
-
-      return u;
+      const u = { ...r, eventLog:(r.eventLog||[]).map(e=>e.id===id?{...e,...fields}:e) };
+      return applyScoreCounts(u, pfx, scoreKey, context);
     });
+  };
+
+  // Still used internally where an immediate, single-step score makes sense.
+  const quickScore = (isOpp, scoreKey, context={}) => {
+    const fields = buildScoreEventFields(scoreKey, context); if(!fields) return;
+    const pfx = isOpp?'opp_':'';
+    const ev = { id:uid(), ts:getTs(), side:isOpp?'opp':'me', ...fields };
+    onMutate(r => applyScoreCounts({ ...r, eventLog:[...(r.eventLog||[]),ev] }, pfx, scoreKey, context));
   };
 
   const deleteEvent = evId => onMutate(r => ({ ...r, eventLog:(r.eventLog||[]).filter(e=>e.id!==evId) }));
@@ -1841,8 +1876,8 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
       )}
 
       {/* Score bar */}
-      <View style={{ flexDirection:'row', gap:4, marginBottom:14 }}>
-        <TouchableOpacity onPress={()=>setScoreSheet('me')} activeOpacity={0.75}
+      <View style={{ flexDirection:'row', gap:4, marginBottom:8 }}>
+        <TouchableOpacity onPress={()=>markEvent(false)} activeOpacity={0.75}
           style={{ flex:1, backgroundColor:C.goldDim, borderWidth:1, borderColor:`${C.gold}33`, paddingVertical:12, alignItems:'center', opacity:isPaused?0.4:1 }}>
           <Cap style={{ color:C.gold, marginBottom:2 }}>You</Cap>
           <Txt style={{ fontSize:28, fontFamily:F.display, color:C.gold, lineHeight:32 }}>{myPts}</Txt>
@@ -1851,13 +1886,25 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
         <View style={{ alignItems:'center', justifyContent:'center', paddingHorizontal:8 }}>
           <Txt style={{ fontSize:9, color:C.border, letterSpacing:2 }}>{isPaused?'PAUSED':'VS'}</Txt>
         </View>
-        <TouchableOpacity onPress={()=>setScoreSheet('opp')} activeOpacity={0.75}
+        <TouchableOpacity onPress={()=>markEvent(true)} activeOpacity={0.75}
           style={{ flex:1, backgroundColor:C.oppSoft, borderWidth:1, borderColor:`${C.opp}33`, paddingVertical:12, alignItems:'center', opacity:isPaused?0.4:1 }}>
           <Cap style={{ color:C.stone, marginBottom:2 }}>Opponent</Cap>
           <Txt style={{ fontSize:28, fontFamily:F.display, color:C.stone, lineHeight:32 }}>{oppPts}</Txt>
           <Cap style={{ color:C.stone, fontSize:7 }}>Score</Cap>
         </TouchableOpacity>
       </View>
+      <Cap style={{ textAlign:'center', marginBottom:8, color:C.muted }}>Tap when it happens — say what it was after</Cap>
+
+      {(() => {
+        const unclassified = (roll.eventLog||[]).filter(e=>e.classified===false);
+        if (!unclassified.length) return null;
+        return (
+          <TouchableOpacity onPress={()=>setClassifyingId(unclassified[0].id)} activeOpacity={0.75}
+            style={{ borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim, paddingVertical:10, alignItems:'center', marginBottom:14 }}>
+            <Txt style={{ fontSize:11, fontFamily:F.semi, color:C.gold }}>{unclassified.length} to classify — tap to continue</Txt>
+          </TouchableOpacity>
+        );
+      })()}
 
       <TouchableOpacity onPress={()=>!isPaused&&setShowReset(true)} activeOpacity={0.75} disabled={isPaused}
         style={{ borderWidth:1, borderColor:C.border, paddingVertical:10, alignItems:'center', marginBottom:14, opacity:isPaused?0.4:1 }}>
@@ -1957,12 +2004,15 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
 
       {subTab==='Event Log' && (
         <EventLogPanel log={roll.eventLog||[]} onDeleteEvent={deleteEvent} roll={roll}
-          onSeek={roll.videoUrl ? (isDirectVid ? sec=>playerRef.current?.seekTo(sec) : setManualSeconds) : null}/>
+          onSeek={roll.videoUrl ? (isDirectVid ? sec=>playerRef.current?.seekTo(sec) : setManualSeconds) : null}
+          onClassify={ev=>setClassifyingId(ev.id)}/>
       )}
 
-      <QuickScoreSheet visible={scoreSheet!==null} isOpp={scoreSheet==='opp'} onClose={()=>setScoreSheet(null)}
+      <QuickScoreSheet visible={classifyingId!==null}
+        isOpp={(roll.eventLog||[]).find(e=>e.id===classifyingId)?.side==='opp'}
+        onClose={()=>setClassifyingId(null)}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}
-        onRecord={(key,context)=>{ quickScore(scoreSheet==='opp',key,context||{}); setScoreSheet(null); }}/>
+        onRecord={(key,context)=>{ classifyMarker(classifyingId,key,context||{}); setClassifyingId(null); }}/>
       <ResetSheet visible={showReset} onClose={()=>setShowReset(false)}
         onConfirm={confirmReset} submissions={submissions}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}/>
