@@ -196,8 +196,8 @@ const abbrevName  = (full='') => { const p=full.trim().split(/\s+/).filter(Boole
 
 const emptyRoll = (partner='',isComp=false) => ({
   id:uid(), partner, startedAt:Date.now(), endedAt:null, isComp, notes:'',
-  subCounts:{}, sweepCounts:{}, posDurations:{}, posCounts:{}, transCounts:{}, guardPassCounts:{},
-  opp_subCounts:{}, opp_sweepCounts:{}, opp_posDurations:{}, opp_posCounts:{}, opp_transCounts:{}, opp_guardPassCounts:{},
+  subCounts:{}, sweepCounts:{}, posCounts:{}, transCounts:{}, guardPassCounts:{},
+  opp_subCounts:{}, opp_sweepCounts:{}, opp_posCounts:{}, opp_transCounts:{}, opp_guardPassCounts:{},
   eventLog:[], paused:false, pausedAt:null, totalPausedMs:0,
 });
 
@@ -1220,6 +1220,119 @@ function QuickScoreSheet({ visible, isOpp, onClose, onRecord, allTechniques=[] }
 
 
 
+// ─── Reset Sheet (Modal bottom sheet) ───────────────────────────────────────────
+// Marks the boundary between exchanges in an open-mat roll. A submission almost
+// always ends the exchange, not the whole roll, so Reset asks how it ended rather
+// than assuming — same three-step flow whether logged live or reconstructed later
+// from video, so the eventLog shape matches either way.
+const RESET_STEP_HEADERS = { cause:'How did it end?', side:'Who submitted?', technique:'Which submission?' };
+
+function ResetSheet({ visible, onClose, onConfirm, submissions=[], allTechniques=[] }) {
+  const [step,       setStep]       = useState('cause');
+  const [side,       setSide]       = useState(null);
+  const [customVal,  setCustomVal]  = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+  const scrollRef = useRef(null);
+  const inputRef  = useRef(null);
+  const ac = side==='opp' ? C.opp : C.gold;
+
+  const reset = () => { setStep('cause'); setSide(null); setCustomVal(''); setShowCustom(false); };
+  const close = () => { onClose(); reset(); };
+
+  const openCustom = () => {
+    setShowCustom(true); setCustomVal('');
+    setTimeout(() => { inputRef.current?.focus(); scrollRef.current?.scrollToEnd({ animated:true }); }, 80);
+  };
+
+  const finishPlain      = () => { onConfirm({ cause:'plain' }); close(); };
+  const finishSubmission = technique => { onConfirm({ cause:'submission', side, technique }); close(); };
+
+  const canGoBack = step !== 'cause';
+  const handleBack = () => {
+    if (step==='technique') setStep('side');
+    else if (step==='side')  { setStep('cause'); setSide(null); }
+    setShowCustom(false); setCustomVal('');
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
+      <View style={{ flex:1, justifyContent:'flex-end', backgroundColor:'rgba(10,10,8,0.8)' }}>
+        {!showCustom
+          ? <TouchableOpacity style={{ flex:1 }} activeOpacity={1} onPress={close}/>
+          : <View style={{ flex:1 }}/>
+        }
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} keyboardVerticalOffset={0}>
+          <View style={{ backgroundColor:C.surface, borderTopWidth:1, borderTopColor:C.borderMid,
+            paddingTop:20, paddingHorizontal:16, paddingBottom:Platform.OS==='ios'?36:16, maxHeight:'90%' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <View style={{ flexDirection:'row', alignItems:'center' }}>
+                {canGoBack && (
+                  <TouchableOpacity onPress={handleBack} style={{ marginRight:12, padding:4 }} activeOpacity={0.7}>
+                    <Txt style={{ fontSize:20, color:C.muted }}>←</Txt>
+                  </TouchableOpacity>
+                )}
+                <View>
+                  <Cap style={{ marginBottom:2 }}>Reset</Cap>
+                  <Txt style={{ fontSize:14, fontFamily:F.semi }}>{RESET_STEP_HEADERS[step]}</Txt>
+                </View>
+              </View>
+              <TouchableOpacity onPress={close}
+                style={{ width:32, height:32, borderWidth:1, borderColor:C.border, alignItems:'center', justifyContent:'center' }}
+                activeOpacity={0.7}>
+                <Txt style={{ color:C.muted, fontSize:14 }}>✕</Txt>
+              </TouchableOpacity>
+            </View>
+
+            {step==='cause' && (
+              <View>
+                <TouchableOpacity onPress={()=>setStep('side')} activeOpacity={0.75}
+                  style={{ padding:14, marginBottom:8, borderWidth:1, borderColor:C.border }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi }}>Submission</Txt>
+                  <Cap style={{ marginTop:2, fontSize:8 }}>Ends this exchange, roll continues</Cap>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={finishPlain} activeOpacity={0.75}
+                  style={{ padding:14, borderWidth:1, borderColor:C.border }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi }}>No finish / reset</Txt>
+                  <Cap style={{ marginTop:2, fontSize:8 }}>Scrambled back to neutral</Cap>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {step==='side' && (
+              <View>
+                <TouchableOpacity onPress={()=>{ setSide('me'); setStep('technique'); }} activeOpacity={0.75}
+                  style={{ padding:14, marginBottom:8, borderWidth:1, borderColor:`${C.gold}55`, backgroundColor:C.goldDim }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.gold }}>You</Txt>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={()=>{ setSide('opp'); setStep('technique'); }} activeOpacity={0.75}
+                  style={{ padding:14, borderWidth:1, borderColor:`${C.opp}55`, backgroundColor:C.oppSoft }}>
+                  <Txt style={{ fontSize:13, fontFamily:F.semi, color:C.opp }}>Opponent</Txt>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {step==='technique' && (
+              <OptionList
+                items={submissions} showPts={false}
+                showCustom={showCustom} customVal={customVal}
+                onCustomChange={setCustomVal}
+                onOpenCustom={openCustom}
+                onCloseCustom={()=>{ setShowCustom(false); setCustomVal(''); }}
+                onCustomSubmit={()=>{ if(customVal.trim()) finishSubmission(customVal.trim()); }}
+                onPick={finishSubmission}
+                inputRef={inputRef} scrollRef={scrollRef} allTechniques={allTechniques}
+                accent={ac}
+              />
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+
+
 // ─── Counter Card ────────────────────────────────────────────────────────────────
 function CounterCard({ item, count, onAdd, onRemove, disabled, ac=C.gold }) {
   return (
@@ -1264,65 +1377,36 @@ function PauseButton({ isPaused, onToggle, small=false }) {
   );
 }
 
-// ─── Position Timer Panel ────────────────────────────────────────────────────────
-function PositionTimerPanel({ positions, durations, posCounts, onRecord, onAddPos, isPaused, isOpp }) {
-  const [active, setActive]       = useState(null);
-  const [liveElapsed, setLiveEl]  = useState(0);
-  const [custom, setCustom]       = useState('');
-  const [customSec, setCustomSec] = useState('');
-  const startRef = useRef(null);
-  const ivRef    = useRef(null);
-  const ac       = isOpp ? C.opp : C.gold;
-
-  useEffect(() => {
-    if (isPaused && active) {
-      clearInterval(ivRef.current);
-      const sp = Math.round((Date.now()-startRef.current)/1000);
-      if(sp>0) onRecord(active,sp,false);
-      setActive(null); setLiveEl(0);
-    }
-  }, [isPaused]);
-  useEffect(() => () => clearInterval(ivRef.current), []);
-
-  const start = pos => {
-    if (isPaused) return;
-    if (active) { clearInterval(ivRef.current); onRecord(active, Math.round((Date.now()-startRef.current)/1000), false); }
-    if (active===pos) { setActive(null); setLiveEl(0); return; }
-    onRecord(pos,0,true); setActive(pos); setLiveEl(0); startRef.current=Date.now();
-    ivRef.current = setInterval(() => setLiveEl(Math.round((Date.now()-startRef.current)/1000)), 500);
-  };
-
-  const sorted = [...positions].sort((a,b)=>(durations[b]||0)-(durations[a]||0));
+// ─── Position Count Panel ────────────────────────────────────────────────────────
+// Positions are logged as a single tap, same as Submissions/Sweeps — no duration is
+// tracked. A position's point value (Mount/Back Control/Knee on Belly) still shows
+// as a badge via getPosPtsKey, it just isn't tied to how long you held it.
+function PositionCountPanel({ positions, posCounts, onAdd, onRemove, onAddPos, disabled, ac }) {
+  const [custom, setCustom] = useState('');
+  const sorted = [...positions].sort((a,b)=>(posCounts[b]||0)-(posCounts[a]||0));
 
   return (
-    <View style={{ opacity:isPaused?0.4:1 }}>
-      <Cap style={{ marginBottom:12 }}>Tap to start · tap again to stop</Cap>
-      <View style={{ flexDirection:'row', flexWrap:'wrap', gap:8, marginBottom:16 }}>
-        {sorted.map(pos => {
-          const isOn = active===pos;
-          const pk   = getPosPtsKey(pos);
-          const pv   = pk ? SCORE_EVENTS[pk]?.pts||0 : 0;
-          const pc   = pk ? SCORE_EVENTS[pk]?.color||null : null;
-          const entries = posCounts[pos]||0;
-          return (
-            <TouchableOpacity key={pos} onPress={()=>start(pos)} activeOpacity={0.75}
-              style={{ backgroundColor:isOn?ac:'transparent', borderWidth:1, borderColor:isOn?ac:(pc||C.border), padding:12 }}>
-              <Txt style={{ fontSize:10, fontFamily:F.semi, letterSpacing:1.5, textTransform:'uppercase', color:isOn?'#0F0F0D':C.text }}>
-                {isOn?'◼ ':'▶ '}{pos}
-                {pv>0&&!isOn&&<Txt style={{ fontSize:8, color:pc, fontFamily:F.semi }}> +{pv}PTS</Txt>}
-              </Txt>
-              <Txt style={{ fontSize:9, color:isOn?'#0F0F0D':C.muted, marginTop:3 }}>
-                {isOn ? `◉ ${fmtSecs(liveElapsed)}` : `${fmtSecs(durations[pos]||0)}${entries>0?` · ${entries}×`:''}`}
-              </Txt>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+    <View>
+      <Cap style={{ color:disabled?C.amber:ac, marginBottom:12 }}>{disabled?'Paused':'Tap + to record'}</Cap>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:12 }}>
+        <View style={{ flexDirection:'row', gap:8 }}>
+          {sorted.map(pos => {
+            const pk = getPosPtsKey(pos);
+            const pv = pk ? SCORE_EVENTS[pk]?.pts||0 : 0;
+            return (
+              <View key={pos} style={{ alignItems:'center', gap:3 }}>
+                <CounterCard item={pos} count={posCounts[pos]||0} onAdd={onAdd} onRemove={onRemove} disabled={disabled} ac={ac}/>
+                {pv>0 && <Cap style={{ fontSize:7, color:ac }}>+{pv} PTS</Cap>}
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
       <View style={{ flexDirection:'row', gap:8 }}>
-        <TextInput value={custom} onChangeText={setCustom} placeholder="New position…" placeholderTextColor={C.muted} style={[s.input, { flex:1 }]}/>
-        <TextInput value={customSec} onChangeText={setCustomSec} placeholder="Sec" keyboardType="numeric" style={[s.input, { width:60 }]}/>
-        <TouchableOpacity onPress={()=>{ if(custom.trim()){ onAddPos(custom.trim(),parseInt(customSec)||0); setCustom(''); setCustomSec(''); }}} activeOpacity={0.75} style={[s.btnGhost, { paddingHorizontal:14 }]}>
-          <Txt style={[s.btnText, { color:C.muted }]}>Add</Txt>
+        <TextInput value={custom} onChangeText={setCustom} placeholder="Add custom position…" placeholderTextColor={C.muted} returnKeyType="done"
+          onSubmitEditing={()=>{ if(custom.trim()&&!disabled){ onAddPos(custom.trim()); setCustom(''); }}} style={[s.input,{flex:1}]}/>
+        <TouchableOpacity onPress={()=>{ if(custom.trim()&&!disabled){ onAddPos(custom.trim()); setCustom(''); }}} activeOpacity={0.75} style={[s.btnGhost,{paddingHorizontal:14}]}>
+          <Txt style={[s.btnText,{color:C.muted}]}>Add</Txt>
         </TouchableOpacity>
       </View>
     </View>
@@ -1335,6 +1419,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   const [subTab, setSubTab]         = useState('Score');
   const [trackingOpp, setTracking]  = useState(false);
   const [scoreSheet, setScoreSheet] = useState(null); // 'me'|'opp'|null
+  const [showReset,  setShowReset]  = useState(false);
   const [customSubInput, setCSI]    = useState('');
   const [customSwpInput, setCSW]    = useState('');
 
@@ -1356,18 +1441,28 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   const addSwp  = item => { if(isPaused)return; addCount('sweepCounts',item); logEvent('sweep',item,item,'sweep'); };
   const addGP   = item => { if(isPaused)return; addCount('guardPassCounts',item); logEvent('guardPass',item,item,'guardPass'); };
   const addTrans= item => { if(isPaused)return; const isTd=takedowns.includes(item); addCount('transCounts',item); logEvent('transition',item,item,isTd?'takedown':null); };
-  const recPos  = (pos,secs,countEntry=false) => {
-    onMutate(r => {
-      const dk=pf('posDurations'), ck=pf('posCounts');
-      const nd=secs>0?{...r[dk],[pos]:(r[dk][pos]||0)+secs}:r[dk];
-      const nc=countEntry?{...r[ck],[pos]:(r[ck][pos]||0)+1}:r[ck];
-      if(countEntry){ const sk=getPosPtsKey(pos); logEvent('position',pos,pos,sk||null); }
-      return { ...r, [dk]:nd, [ck]:nc };
-    });
-  };
-  const addNewPos=(pos,secs)=>{ if(!positions.includes(pos)) setPositions(ps=>[...ps,pos]); if(secs>0) recPos(pos,secs,true); };
+  const addPos  = item => { if(isPaused)return; addCount('posCounts',item); const sk=getPosPtsKey(item); logEvent('position',item,item,sk||null); };
+  const addCustomPos=(n)=>{ if(!positions.includes(n)) setPositions(ps=>[...ps,n]); addPos(n); };
   const addCustomSub=(n)=>{ if(!submissions.includes(n)) setSubmissions(ss=>[...ss,n]); addSub(n); };
   const addCustomSwp=(n)=>{ if(!sweeps.includes(n)) setSweeps(sw=>[...sw,n]); addSwp(n); };
+  const confirmReset = ({ cause, side:subSide, technique }) => {
+    if (isPaused) return;
+    if (cause==='submission' && technique) {
+      const pfx = subSide==='opp' ? 'opp_' : '';
+      onMutate(r => {
+        const key   = `${pfx}subCounts`;
+        const subEv = { id:uid(), ts:Date.now(), side:subSide, type:'submission', item:technique, label:technique, scoreKey:null, scored:false, pts:0 };
+        const rstEv = { id:uid(), ts:Date.now(), side:subSide, type:'reset', cause:'submission', technique, label:`Reset — submission: ${technique} (${subSide==='me'?'you':'opp'})`, scoreKey:null, scored:false, pts:0 };
+        return { ...r, [key]:{ ...r[key], [technique]:(r[key][technique]||0)+1 }, eventLog:[...(r.eventLog||[]),subEv,rstEv] };
+      });
+      if (!submissions.includes(technique)) setSubmissions(ss=>[...ss,technique]);
+    } else {
+      onMutate(r => {
+        const rstEv = { id:uid(), ts:Date.now(), side:null, type:'reset', cause:'plain', technique:null, label:'Reset', scoreKey:null, scored:false, pts:0 };
+        return { ...r, eventLog:[...(r.eventLog||[]),rstEv] };
+      });
+    }
+  };
   const addCustomTrans=(n,type)=>{
     if(!transitions.includes(n)) setTransitions(t=>[...t,n]);
     if(type==='Guard Pull'&&!guardPulls.includes(n)) setGuardPulls(g=>[...g,n]);
@@ -1458,7 +1553,6 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
   const oppPts = (roll.eventLog||[]).filter(e=>e.side==='opp'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
   const ac_sub = trackingOpp?roll.opp_subCounts||{}:roll.subCounts||{};
   const aw     = trackingOpp?roll.opp_sweepCounts||{}:roll.sweepCounts||{};
-  const ap     = trackingOpp?roll.opp_posDurations||{}:roll.posDurations||{};
   const ak     = trackingOpp?roll.opp_posCounts||{}:roll.posCounts||{};
   const at     = trackingOpp?roll.opp_transCounts||{}:roll.transCounts||{};
   const agp    = trackingOpp?roll.opp_guardPassCounts||{}:roll.guardPassCounts||{};
@@ -1485,6 +1579,11 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
           <Cap style={{ color:C.stone, fontSize:7 }}>Score</Cap>
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity onPress={()=>!isPaused&&setShowReset(true)} activeOpacity={0.75} disabled={isPaused}
+        style={{ borderWidth:1, borderColor:C.border, paddingVertical:10, alignItems:'center', marginBottom:14, opacity:isPaused?0.4:1 }}>
+        <Txt style={{ fontSize:9, fontFamily:F.semi, letterSpacing:2, textTransform:'uppercase', color:C.muted }}>↺ Reset — exchange ended</Txt>
+      </TouchableOpacity>
 
       <ScoreComparison roll={roll}/>
       <View style={{ height:18 }}/>
@@ -1574,7 +1673,7 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
       )}
 
       {subTab==='Positions' && (
-        <PositionTimerPanel positions={positions} durations={ap} posCounts={ak} onRecord={recPos} onAddPos={addNewPos} isPaused={isPaused} isOpp={trackingOpp}/>
+        <PositionCountPanel positions={positions} posCounts={ak} onAdd={addPos} onRemove={i=>remCount('posCounts',i)} onAddPos={addCustomPos} disabled={disabled} ac={ac}/>
       )}
 
       {subTab==='Event Log' && <EventLogPanel log={roll.eventLog||[]} onDeleteEvent={deleteEvent}/>}
@@ -1582,6 +1681,9 @@ function RollTrackingPanel({ roll, onMutate, submissions, sweeps, positions, tra
       <QuickScoreSheet visible={scoreSheet!==null} isOpp={scoreSheet==='opp'} onClose={()=>setScoreSheet(null)}
         allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}
         onRecord={(key,context)=>{ quickScore(scoreSheet==='opp',key,context||{}); setScoreSheet(null); }}/>
+      <ResetSheet visible={showReset} onClose={()=>setShowReset(false)}
+        onConfirm={confirmReset} submissions={submissions}
+        allTechniques={[...submissions, ...sweeps, ...positions, ...transitions, ...guardPulls, ...takedowns]}/>
     </View>
   );
 }
@@ -1722,7 +1824,6 @@ function EndRollModal({ visible, submissions, onEnd, onCancel }) {
 function RollCard({ roll, index, onView, onDelete, confirm }) {
   const myPts  = (roll.eventLog||[]).filter(e=>e.side==='me'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
   const oppPts = (roll.eventLog||[]).filter(e=>e.side==='opp'&&e.scored).reduce((a,e)=>a+(e.pts||0),0);
-  const totalPos = Object.values(roll.posDurations||{}).reduce((a,b)=>a+b,0);
   const res = roll.rollResult ? (roll.rollResult==='win'?'W':roll.rollResult==='loss'?'L':'D') : (myPts>oppPts?'W':myPts<oppPts?'L':'T');
   const rc  = res==='W'?C.sage:res==='L'?C.red:C.amber;
   const isSub = roll.endType==='submission';
@@ -1755,7 +1856,6 @@ function RollCard({ roll, index, onView, onDelete, confirm }) {
           </View>
         </View>
         <View style={{ flexDirection:'row', marginTop:10, alignItems:'center' }}>
-          {totalPos>0 && <Txt style={{ fontSize:12, color:C.textDim, marginRight:14 }}>{fmtSecs(totalPos)} <Cap style={{ fontSize:8 }}>mat</Cap></Txt>}
           {isSub && <View style={{ borderWidth:1, borderColor:`${C.red}55`, paddingHorizontal:7, paddingVertical:3, marginRight:6, borderRadius:4 }}>
             <Txt style={{ fontSize:10, fontFamily:F.semi, color:C.red }}>🔒 {roll.submissionName||'SUB'}</Txt>
           </View>}
@@ -4648,13 +4748,13 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
   // ── Cumulative data ──────────────────────────────────────────────────────────
   const allRolls = [...(activeRoll ? [activeRoll] : []), ...rolls];
   const cumData  = allRolls.reduce((m, r) => {
-    ['subCounts','sweepCounts','posDurations','transCounts','guardPassCounts',
-     'opp_subCounts','opp_sweepCounts','opp_posDurations','opp_transCounts','opp_guardPassCounts']
+    ['subCounts','sweepCounts','posCounts','transCounts','guardPassCounts',
+     'opp_subCounts','opp_sweepCounts','opp_posCounts','opp_transCounts','opp_guardPassCounts']
       .forEach(k => Object.entries(r[k]||{}).forEach(([kk,v]) => { m[k][kk]=(m[k][kk]||0)+v; }));
     m.eventLog=[...m.eventLog,...(r.eventLog||[])];
     return m;
-  }, {subCounts:{},sweepCounts:{},posDurations:{},transCounts:{},guardPassCounts:{},
-      opp_subCounts:{},opp_sweepCounts:{},opp_posDurations:{},opp_transCounts:{},opp_guardPassCounts:{},eventLog:[]});
+  }, {subCounts:{},sweepCounts:{},posCounts:{},transCounts:{},guardPassCounts:{},
+      opp_subCounts:{},opp_sweepCounts:{},opp_posCounts:{},opp_transCounts:{},opp_guardPassCounts:{},eventLog:[]});
 
   const rollData   = scope==='all' ? cumData : (rolls.find(r=>r.id===scope)||cumData);
   const tdSet      = new Set(takedowns);
@@ -5272,8 +5372,8 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
           <Section title="Guard Passes" accent={C.teal}>
             <PieChart size={200} data={Object.entries(rollData.guardPassCounts||{}).map(([k,v],i)=>({label:k,value:v,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
           </Section>
-          <Section title="Position Time" accent={C.sage}>
-            <PieChart size={200} data={positions.map((p,i)=>({label:p,value:rollData.posDurations[p]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
+          <Section title="Positions" accent={C.sage}>
+            <PieChart size={200} data={positions.map((p,i)=>({label:p,value:rollData.posCounts[p]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
           </Section>
           <Section title="Takedowns" accent={C.blue}>
             <PieChart size={200} data={transitions.filter(t=>tdSet.has(t)).map((t,i)=>({label:t,value:rollData.transCounts[t]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
@@ -5291,8 +5391,8 @@ function ChartsScreen({ rolls, activeRoll, competitions, submissions, sweeps, po
           <Section title="Opp. Sweeps" accent={C.opp}>
             <PieChart size={200} data={sweeps.map((s,i)=>({label:s,value:rollData.opp_sweepCounts[s]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
           </Section>
-          <Section title="Opp. Position Time" accent={C.opp}>
-            <PieChart size={200} data={positions.map((p,i)=>({label:p,value:rollData.opp_posDurations[p]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
+          <Section title="Opp. Positions" accent={C.opp}>
+            <PieChart size={200} data={positions.map((p,i)=>({label:p,value:rollData.opp_posCounts[p]||0,color:PIE[i%PIE.length]})).filter(d=>d.value>0)}/>
           </Section>
         </View>)}
 
