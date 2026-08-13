@@ -693,7 +693,7 @@ function useConfirm() {
 const MARK_MODULE_D = "M 394.0,150.0 H 788.0 Q 850.0,150.0 850.0,212.0 V 298.0 Q 850.0,360.0 788.0,360.0 H 394.0 Z";
 
 function AppLogo({ size=32, color }) {
-  const fill = color || C.charcoal;
+  const fill = color || C.text;
   return (
     <Svg width={size} height={size} viewBox="0 0 1000 1000">
       <Path d={MARK_MODULE_D} transform="rotate(0 500 500)" fill={fill}/>
