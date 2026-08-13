@@ -510,12 +510,13 @@ function toDbRound(r, competitionId, athleteId) {
     match_time: r.matchTime, started_at: r.startedAt, ended_at: r.endedAt,
     is_active: r.isActive || false, event_log: r.eventLog || [],
     sub_counts: r.subCounts || {}, sweep_counts: r.sweepCounts || {},
-    pos_durations: r.posDurations || {}, trans_counts: r.transCounts || {},
+    pos_durations: r.posDurations || {}, pos_counts: r.posCounts || {}, trans_counts: r.transCounts || {},
     guard_pass_counts: r.guardPassCounts || {},
     opp_sub_counts: r.opp_subCounts || {}, opp_sweep_counts: r.opp_sweepCounts || {},
-    opp_pos_durations: r.opp_posDurations || {}, opp_trans_counts: r.opp_transCounts || {},
+    opp_pos_durations: r.opp_posDurations || {}, opp_pos_counts: r.opp_posCounts || {}, opp_trans_counts: r.opp_transCounts || {},
     opp_guard_pass_counts: r.opp_guardPassCounts || {},
     paused: r.paused || false, paused_at: r.pausedAt, total_paused_ms: r.totalPausedMs || 0,
+    video_url: r.videoUrl || null, video_mode: r.videoMode || null, video_sync_offset: r.videoSyncOffset ?? null,
   };
 }
 function fromDbRound(r) {
@@ -526,12 +527,13 @@ function fromDbRound(r) {
     matchTime: r.match_time, startedAt: r.started_at, endedAt: r.ended_at,
     isActive: r.is_active, eventLog: r.event_log || [],
     subCounts: r.sub_counts || {}, sweepCounts: r.sweep_counts || {},
-    posDurations: r.pos_durations || {}, transCounts: r.trans_counts || {},
+    posDurations: r.pos_durations || {}, posCounts: r.pos_counts || {}, transCounts: r.trans_counts || {},
     guardPassCounts: r.guard_pass_counts || {},
     opp_subCounts: r.opp_sub_counts || {}, opp_sweepCounts: r.opp_sweep_counts || {},
-    opp_posDurations: r.opp_pos_durations || {}, opp_transCounts: r.opp_trans_counts || {},
+    opp_posDurations: r.opp_pos_durations || {}, opp_posCounts: r.opp_pos_counts || {}, opp_transCounts: r.opp_trans_counts || {},
     opp_guardPassCounts: r.opp_guard_pass_counts || {},
     paused: r.paused, pausedAt: r.paused_at, totalPausedMs: r.total_paused_ms || 0,
+    videoUrl: r.video_url || null, videoMode: r.video_mode || null, videoSyncOffset: r.video_sync_offset ?? null,
   };
 }
 function fromDbComp(c) {
